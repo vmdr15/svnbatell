@@ -5,53 +5,228 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Batalla de Leyendas</title>
   <style>
+    :root {
+      color-scheme: dark;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: #0b1220;
+      color: #f1f5f9;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
       min-height: 100vh;
-      display: grid;
-      place-items: center;
-      background: linear-gradient(135deg, #090c14 0%, #101827 100%);
-      color: #f1f5f9;
-      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at top, rgba(56, 189, 248, 0.12), transparent 25%),
+        radial-gradient(circle at bottom, rgba(99, 102, 241, 0.16), transparent 20%),
+        linear-gradient(180deg, #090c14 0%, #121b2e 100%);
       padding: 24px;
     }
-    .box {
-      max-width: 700px;
-      border-radius: 28px;
-      background: rgba(15, 23, 42, 0.92);
+
+    .container {
+      width: min(100%, 960px);
+      display: grid;
+      gap: 24px;
+    }
+
+    .card {
+      border-radius: 30px;
+      padding: 32px;
+      background: rgba(15, 23, 42, 0.94);
       border: 1px solid rgba(255, 255, 255, 0.08);
-      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
-      padding: 40px;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
     }
-    h1 {
-      font-size: clamp(2rem, 4vw, 3.4rem);
-      margin-bottom: 18px;
+
+    .hero {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
     }
-    p {
+
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(2.4rem, 4vw, 3.8rem);
+      letter-spacing: -0.04em;
+    }
+
+    .hero p {
+      margin: 0;
       color: #cbd5e1;
-      line-height: 1.8;
-      margin-bottom: 28px;
-      font-size: 1.05rem;
+      line-height: 1.75;
+      font-size: 1rem;
     }
-    a {
-      display: inline-flex;
-      padding: 14px 24px;
+
+    .battle-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 22px;
+      margin-top: 16px;
+    }
+
+    .panel {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 24px;
+      padding: 24px;
+    }
+
+    .panel h2 {
+      margin-top: 0;
+      margin-bottom: 14px;
+      font-size: 1.2rem;
+      color: #eff6ff;
+    }
+
+    .stats {
+      display: grid;
+      gap: 12px;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #cbd5e1;
+      font-size: 0.98rem;
+    }
+
+    .bar {
+      width: 100%;
+      height: 12px;
       border-radius: 999px;
-      background: linear-gradient(135deg, #38bdf8, #818cf8);
-      color: #fff;
-      text-decoration: none;
-      font-weight: 700;
-      transition: transform 0.18s ease;
+      background: rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+      margin-top: 8px;
     }
-    a:hover { transform: translateY(-2px); }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #3b82f6, #6366f1);
+      transition: width 0.2s ease;
+    }
+
+    .controls {
+      display: grid;
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .button {
+      width: 100%;
+      padding: 16px 18px;
+      border: none;
+      border-radius: 999px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.18s ease, box-shadow 0.18s ease;
+      color: #fff;
+      background: linear-gradient(135deg, #38bdf8, #6366f1);
+    }
+
+    .button.secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: #e2e8f0;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .button:hover {
+      transform: translateY(-2px);
+    }
+
+    .log {
+      min-height: 180px;
+      margin-top: 12px;
+      padding: 18px;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #dbeafe;
+      font-size: 0.96rem;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      overflow-y: auto;
+      max-height: 260px;
+    }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    .footer a {
+      color: #c7d2fe;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    @media (max-width: 860px) {
+      .battle-grid {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
-  <div class="box">
-    <h1>Tu juego está listo</h1>
-    <p>Esta página sirve como punto de partida para tu juego de batalla. Puedes reemplazar este contenido con el juego real en <code>juego.js</code> o agregar todas las mecánicas en esta misma página.</p>
-    <a href="index.html">Volver a la portada</a>
-  </div>
+  <main class="container">
+    <section class="card hero">
+      <div>
+        <span style="display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;background:rgba(255,255,255,0.08);color:#c7d2fe;font-weight:700;">Vista previa de batalla</span>
+      </div>
+      <div>
+        <h1>Batalla de Leyendas</h1>
+        <p>Prueba la mecánica del juego en esta página. Ataca, defiende o cura a tu héroe y observa cómo responde el enemigo en cada turno.</p>
+      </div>
+    </section>
+
+    <section class="card battle-grid">
+      <div class="panel">
+        <h2>Estado del combate</h2>
+        <div class="stats">
+          <div class="stat-row">
+            <span>Guerrero</span>
+            <span id="player-hp-text">100 / 100</span>
+          </div>
+          <div class="bar"><div class="bar-fill" id="player-hp-bar" style="width:100%"></div></div>
+          <div class="stat-row">
+            <span>Señor Sombrío</span>
+            <span id="enemy-hp-text">110 / 110</span>
+          </div>
+          <div class="bar"><div class="bar-fill" id="enemy-hp-bar" style="width:100%"></div></div>
+          <div class="stat-row" style="color:#a5b4fc;">
+            <span>Turno actual</span>
+            <span id="turn-status">Jugador</span>
+          </div>
+        </div>
+        <div class="controls">
+          <button class="button" id="attack-button" type="button">Atacar</button>
+          <button class="button secondary" id="defend-button" type="button">Defender</button>
+          <button class="button secondary" id="heal-button" type="button">Curar</button>
+          <button class="button secondary" id="restart-button" type="button">Reiniciar batalla</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Registro de combate</h2>
+        <div class="log" id="battle-log">La batalla comienza. Elige tu acción para enfrentarte al Señor Sombrío.</div>
+      </div>
+    </section>
+
+    <div class="footer">
+      <a href="index.html">← Volver a la portada</a>
+      <span style="color:#9ca3af;">Juego creado con lógica en <code>juego.js</code>.</span>
+    </div>
+  </main>
+  <script src="juego.js" defer></script>
 </body>
 </html>
