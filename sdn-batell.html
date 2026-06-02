@@ -1,0 +1,57 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Batalla de Leyendas</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, #090c14 0%, #101827 100%);
+      color: #f1f5f9;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      text-align: center;
+      padding: 24px;
+    }
+    .box {
+      max-width: 700px;
+      border-radius: 28px;
+      background: rgba(15, 23, 42, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+      padding: 40px;
+    }
+    h1 {
+      font-size: clamp(2rem, 4vw, 3.4rem);
+      margin-bottom: 18px;
+    }
+    p {
+      color: #cbd5e1;
+      line-height: 1.8;
+      margin-bottom: 28px;
+      font-size: 1.05rem;
+    }
+    a {
+      display: inline-flex;
+      padding: 14px 24px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #38bdf8, #818cf8);
+      color: #fff;
+      text-decoration: none;
+      font-weight: 700;
+      transition: transform 0.18s ease;
+    }
+    a:hover { transform: translateY(-2px); }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>Tu juego está listo</h1>
+    <p>Esta página sirve como punto de partida para tu juego de batalla. Puedes reemplazar este contenido con el juego real en <code>juego.js</code> o agregar todas las mecánicas en esta misma página.</p>
+    <a href="index.html">Volver a la portada</a>
+  </div>
+</body>
+</html>

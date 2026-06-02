@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Batalla epica</title>
+  <title>Batalla épica</title>
   <style>
     :root {
       color-scheme: dark;
@@ -81,6 +81,8 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      background: rgba(255, 255, 255, 0.08);
+      color: #e9eef5;
     }
 
     .button-primary {
@@ -90,8 +92,6 @@
     }
 
     .button-secondary {
-      background: rgba(255, 255, 255, 0.08);
-      color: #e9eef5;
       border: 1px solid rgba(255, 255, 255, 0.14);
     }
 
@@ -114,7 +114,7 @@
     }
 
     .badge::before {
-      content: "??";
+      content: "⚔️";
     }
 
     .info-grid {
@@ -122,6 +122,10 @@
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 18px;
       margin-top: 32px;
+    }
+
+    .info-grid.hidden {
+      display: none;
     }
 
     .info-card {
@@ -186,7 +190,6 @@
       background: rgba(0, 0, 0, 0.45);
       color: #d1e5ff;
       font-size: 0.92rem;
-      letter-spacing: 0.02em;
       text-transform: uppercase;
       font-weight: 700;
       letter-spacing: 0.12em;
@@ -233,23 +236,23 @@
       <div>
         <span class="badge">Portada de batalla</span>
         <h1>Batalla de Leyendas</h1>
-        <p>Prep�rate para entrar en un mundo de estrategia, combate y gloria. Elige tus armas, domina el campo de batalla y derrota a tus rivales en una aventura �pica.</p>
+        <p>Prepárate para entrar en un mundo de estrategia, combate y gloria. Elige tus armas, domina el campo de batalla y derrota a tus rivales en una aventura épica.</p>
         <div class="buttons">
           <a class="button-primary" href="sdn-batell.html">Iniciar batalla</a>
-          <a class="button-secondary" href="#detalles">Ver detalles</a>
+          <button class="button-secondary" id="toggle-details" type="button">Ocultar detalles</button>
         </div>
         <div class="info-grid" id="detalles">
           <article class="info-card">
             <h3>Modo de juego</h3>
-            <p>Un duelo intenso de ataque y defensa que desaf�a tu rapidez mental y tu habilidad para tomar decisiones bajo presi�n.</p>
+            <p>Un duelo intenso de ataque y defensa que desafía tu rapidez mental y tu habilidad para tomar decisiones bajo presión.</p>
           </article>
           <article class="info-card">
-            <h3>Progresi�n</h3>
-            <p>Desbloquea mejoras, fortalece tus h�roes y escala niveles hasta convertirte en el campe�n del campo de batalla.</p>
+            <h3>Progresión</h3>
+            <p>Desbloquea mejoras, fortalece tus héroes y escala niveles hasta convertirte en el campeón del campo de batalla.</p>
           </article>
           <article class="info-card">
             <h3>Estilo visual</h3>
-            <p>Dise�o oscuro y cinematogr�fico con efectos de luces y un ambiente inmersivo de combate medieval y futurista.</p>
+            <p>Diseño oscuro y cinematográfico con efectos de luces y un ambiente inmersivo de combate medieval y futurista.</p>
           </article>
         </div>
       </div>
@@ -263,62 +266,14 @@
       </div>
     </div>
   </main>
-</body>
-</html>
-!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Batalla de Leyendas</title>
-  <style>
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      background: linear-gradient(135deg, #090c14 0%, #101827 100%);
-      color: #f1f5f9;
-      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-      text-align: center;
-      padding: 24px;
-    }
-    .box {
-      max-width: 700px;
-      border-radius: 28px;
-      background: rgba(15, 23, 42, 0.92);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
-      padding: 40px;
-    }
-    h1 {
-      font-size: clamp(2rem, 4vw, 3.4rem);
-      margin-bottom: 18px;
-    }
-    p {
-      color: #cbd5e1;
-      line-height: 1.8;
-      margin-bottom: 28px;
-      font-size: 1.05rem;
-    }
-    a {
-      display: inline-flex;
-      padding: 14px 24px;
-      border-radius: 999px;
-      background: linear-gradient(135deg, #38bdf8, #818cf8);
-      color: #fff;
-      text-decoration: none;
-      font-weight: 700;
-      transition: transform 0.18s ease;
-    }
-    a:hover { transform: translateY(-2px); }
-  </style>
-</head>
-<body>
-  <div class="box">
-    <h1>Tu juego est� listo</h1>
-    <p>Esta p�gina sirve como punto de partida para tu juego de batalla. Puedes reemplazar este contenido con el juego real en `juego.js` o agregar todas las mec�nicas en esta misma p�gina.</p>
-    <a href="index.html">Volver a la portada</a>
-  </div>
+  <script>
+    const toggleButton = document.getElementById('toggle-details');
+    const detalles = document.getElementById('detalles');
+
+    toggleButton.addEventListener('click', () => {
+      const hidden = detalles.classList.toggle('hidden');
+      toggleButton.textContent = hidden ? 'Ver detalles' : 'Ocultar detalles';
+    });
+  </script>
 </body>
 </html>
