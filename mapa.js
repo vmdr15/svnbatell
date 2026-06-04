@@ -260,9 +260,26 @@
       worker.progress += 1 / duration;
       if(worker.progress >= 1) {
         if(worker.phase === 'going') {
+          if(worker.type === 'constructor' && worker.targetTile) {
+            worker.phase = 'building';
+            worker.progress = 0;
+            addLog('El constructor llegó al sitio y comienza la construcción.');
+          } else {
+            worker.phase = 'returning';
+            worker.progress = 0;
+            addLog(`El ${worker.type} llegó al recurso y comienza a regresar al castillo.`);
+          }
+        } else if(worker.phase === 'building') {
+          const tile = worker.targetTile;
+          if(tile && tile.type === 'empty' && !tile.structure) {
+            tile.type = 'barracks';
+            tile.structure = 'barracks';
+            tile.structureHealth = structureHealth.barracks;
+            tile.collected = true;
+            addLog('La barraca fue construida en el lugar seleccionado.');
+          }
           worker.phase = 'returning';
           worker.progress = 0;
-          addLog(`El ${worker.type} llegó al recurso y comienza a regresar al castillo.`);
         } else {
           activeWorkers.splice(i, 1);
           addLog(`El ${worker.type} regresó al castillo.`);
@@ -508,11 +525,15 @@
       return;
     }
     Object.entries(cost).forEach(([key, amount]) => inventory[key] -= amount);
-    tile.type = 'barracks';
-    tile.structure = 'barracks';
-    tile.structureHealth = structureHealth.barracks;
-    tile.collected = true;
-    addLog('Construiste unas barracas en el mapa.');
+    activeWorkers.push({
+      type: 'constructor',
+      from: { ...castleCoords },
+      to: { x: tile.x, y: tile.y },
+      progress: 0,
+      phase: 'going',
+      targetTile: tile
+    });
+    addLog('Un constructor parte del castillo hacia el lugar de construcción.');
     updateInventoryPanel();
     renderSelectedInfo();
     drawGrid();
