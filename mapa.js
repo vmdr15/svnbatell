@@ -61,6 +61,7 @@
       structure: null,
       structureHealth: null,
       units: { caballero: 0, arquero: 0 },
+      building: false,
       x: 0,
       y: 0
     };
@@ -276,6 +277,7 @@
             tile.structure = 'barracks';
             tile.structureHealth = structureHealth.barracks;
             tile.collected = true;
+            tile.building = false;
             addLog('La barraca fue construida en el lugar seleccionado.');
           }
           worker.phase = 'returning';
@@ -467,8 +469,11 @@
         <button class="button secondary" onclick="window.mapActions.repair()">Reparar castillo</button>
       `;
     } else if(selectedTile.type === 'empty' && canBuildBarracks(selectedTile)) {
-      description = 'Terreno vacío junto al castillo. Construye barracas para entrenar unidades.';
-      buttons = `<button class="button" onclick="window.mapActions.buildBarracks()">Construir barracas</button>`;
+      const building = selectedTile.building;
+      description = building
+        ? 'El constructor ya está en camino para construir aquí.'
+        : 'Terreno vacío junto al castillo. Construye barracas para entrenar unidades.';
+      buttons = `<button class="button" onclick="window.mapActions.buildBarracks()" ${building ? 'disabled' : ''}>${building ? 'Construyendo...' : 'Construir barracas'}</button>`;
     } else {
       description = 'Terreno despejado. Explora más para encontrar recursos.';
     }
@@ -524,7 +529,12 @@
       addLog('No tienes suficientes recursos para construir barracas.');
       return;
     }
+    if(tile.building) {
+      addLog('Ya hay un constructor en camino a ese lugar. Espera a que termine.');
+      return;
+    }
     Object.entries(cost).forEach(([key, amount]) => inventory[key] -= amount);
+    tile.building = true;
     activeWorkers.push({
       type: 'constructor',
       from: { ...castleCoords },
