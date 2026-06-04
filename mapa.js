@@ -47,6 +47,8 @@
   let selectedTile = null;
   let totalCollected = 0;
   const structureHealth = { castle: 200, barracks: 120 };
+  const activeWorkers = [];
+  let castleCoords = { x: Math.floor(COLS / 2), y: Math.floor(ROWS / 2) };
 
   function createTile(type) {
     return {
@@ -84,6 +86,8 @@
     createEmptyRing(center.x, center.y);
     fillResources();
     selectedTile = castleTile;
+    castleCoords = { x: center.x, y: center.y };
+    activeWorkers.length = 0;
   }
 
   function isCenter(x,y) {
@@ -227,6 +231,57 @@
         }
       }
     }
+    drawWorkers();
+  }
+
+  function getWorkerIconType(tileType) {
+    if(tileType === 'forest') return 'talador';
+    return 'minero';
+  }
+
+  function createWorkerTask(tile) {
+    const workerType = getWorkerIconType(tile.type);
+    activeWorkers.push({
+      type: workerType,
+      from: { ...castleCoords },
+      to: { x: tile.x, y: tile.y },
+      progress: 0,
+      phase: 'going'
+    });
+  }
+
+  function updateWorkers() {
+    const duration = 80;
+    for(let i = activeWorkers.length - 1; i >= 0; i--) {
+      const worker = activeWorkers[i];
+      worker.progress += 1 / duration;
+      if(worker.progress >= 1) {
+        if(worker.phase === 'going') {
+          worker.phase = 'returning';
+          worker.progress = 0;
+          addLog(`El ${worker.type} llegó al recurso y comienza a regresar al castillo.`);
+        } else {
+          activeWorkers.splice(i, 1);
+          addLog(`El ${worker.type} regresó al castillo.`);
+        }
+      }
+    }
+  }
+
+  function drawWorkers() {
+    activeWorkers.forEach(worker => {
+      const start = worker.phase === 'going' ? worker.from : worker.to;
+      const end = worker.phase === 'going' ? worker.to : worker.from;
+      const sx = start.x * TILE + TILE / 2;
+      const sy = start.y * TILE + TILE / 2;
+      const ex = end.x * TILE + TILE / 2;
+      const ey = end.y * TILE + TILE / 2;
+      const px = sx + (ex - sx) * worker.progress;
+      const py = sy + (ey - sy) * worker.progress;
+      if(assetImages[worker.type]?.complete) {
+        ctx.drawImage(assetImages[worker.type], px - TILE/6, py - TILE/6, TILE/3, TILE/3);
+      }
+    });
   }
 
   function formatNumber(value) {
@@ -282,18 +337,21 @@
   function gatherTile(tile) {
     if(!tile.discovered) return;
     if(tile.type === 'forest' && !tile.collected) {
+      createWorkerTask(tile);
       tile.collected = true;
       tile.type = 'empty';
       inventory.madera += 8;
       totalCollected += 8;
       addLog('Recolección: obtuviste madera de los árboles.');
     } else if(tile.type === 'rock' && !tile.collected) {
+      createWorkerTask(tile);
       tile.collected = true;
       tile.type = 'empty';
       inventory.piedra += 10;
       totalCollected += 10;
       addLog('Recolección: obtuviste piedra de las rocas.');
     } else if(tile.type === 'cave') {
+      createWorkerTask(tile);
       inventory.piedra += 4;
       inventory.mineral += 3;
       totalCollected += 7;
@@ -538,10 +596,10 @@
 
   function drawLoop() {
     if(readyCount >= Object.keys(ASSETS).length) {
+      updateWorkers();
       drawGrid();
-    } else {
-      requestAnimationFrame(drawLoop);
     }
+    requestAnimationFrame(drawLoop);
   }
 
   buildMap();
