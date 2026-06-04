@@ -1,106 +1,134 @@
-// Mapa de exploración con niebla de guerra y recursos colocados aleatoriamente
-(function(){
+﻿(function(){
   const canvas = document.getElementById('explore-map');
   if(!canvas) return;
   const ctx = canvas.getContext('2d');
-
-  const TILE = 40; // tamaño en px
+  const TILE = 40;
   const COLS = Math.floor(canvas.width / TILE);
   const ROWS = Math.floor(canvas.height / TILE);
 
-  const assets = [
-    'elementos/arbola.gif',
-    'elementos/arquero.gif',
-    'elementos/barraca.gif',
-    'elementos/caballero.gif',
-    'elementos/castillo%20(1).gif',
-    'elementos/constructor.gif',
-    'elementos/cueva.gif',
-    'elementos/minero.gif',
-    'elementos/roca.gif',
-    'elementos/talador.gif'
-  ];
+  const ASSETS = {
+    forest: 'elementos/arbola.gif',
+    rock: 'elementos/roca.gif',
+    cave: 'elementos/cueva.gif',
+    barracks: 'elementos/barraca.gif',
+    castle: 'elementos/castillo (1).gif',
+    caballero: 'elementos/caballero.gif',
+    arquero: 'elementos/arquero.gif',
+    constructor: 'elementos/constructor.gif',
+    minero: 'elementos/minero.gif',
+    talador: 'elementos/talador.gif'
+  };
 
-  const images = {};
-  let loaded = 0;
-
-  assets.forEach(src => {
+  const assetImages = {};
+  let readyCount = 0;
+  Object.entries(ASSETS).forEach(([key, path]) => {
     const img = new Image();
-    img.src = src;
-    img.onload = () => { loaded++; }
-    images[src] = img;
+    img.src = encodeURI(path);
+    img.onload = () => { readyCount++; };
+    assetImages[key] = img;
   });
 
-  // mapa de tiles
+  const inventory = {
+    madera: 0,
+    piedra: 0,
+    mineral: 0,
+    oro: 0,
+    hierro: 0,
+    cobre: 0,
+    caballeros: 0,
+    arqueros: 0
+  };
+
+  const tileTypes = ['forest', 'rock', 'cave'];
   const map = [];
-  for(let y=0;y<ROWS;y++){
-    const row = [];
-    for(let x=0;x<COLS;x++){
-      row.push({
-        discovered: false,
-        resource: Math.random() < 0.12 ? assets[Math.floor(Math.random()*assets.length)] : null
-      });
-    }
-    map.push(row);
+  let selectedTile = null;
+  let totalCollected = 0;
+  const structureHealth = { castle: 200, barracks: 120 };
+
+  function createTile(type) {
+    return {
+      type,
+      discovered: false,
+      collected: false,
+      structure: null,
+      structureHealth: null,
+      units: { caballero: 0, arquero: 0 },
+      x: 0,
+      y: 0
+    };
   }
 
-  // posicion inicial del explorador (centro)
-  let explorer = { x: Math.floor(COLS/2), y: Math.floor(ROWS/2), vision: 2 };
-  map[explorer.y][explorer.x].discovered = true;
+  function buildMap() {
+    map.length = 0;
+    for(let y=0;y<ROWS;y++){
+      const row = [];
+      for(let x=0;x<COLS;x++){
+        const tile = createTile('empty');
+        tile.x = x; tile.y = y;
+        row.push(tile);
+      }
+      map.push(row);
+    }
 
-  let collected = 0;
+    const center = { x: Math.floor(COLS/2), y: Math.floor(ROWS/2) };
+    const castleTile = map[center.y][center.x];
+    castleTile.type = 'castle';
+    castleTile.discovered = true;
+    castleTile.structure = 'castle';
+    castleTile.structureHealth = structureHealth.castle;
+    castleTile.collected = true;
 
-  function drawGrid(){
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    // tiles
+    placeStructures('barracks', 3, tile => tile.type === 'empty');
+    fillResources();
+    selectedTile = castleTile;
+  }
+
+  function placeStructures(type, count, predicate) {
+    let placed = 0;
+    while(placed < count) {
+      const x = Math.floor(Math.random()*COLS);
+      const y = Math.floor(Math.random()*ROWS);
+      const tile = map[y][x];
+      if(predicate(tile) && !isCenter(x,y)){
+        tile.type = type;
+        tile.structure = type;
+        tile.structureHealth = structureHealth[type];
+        tile.collected = true;
+        placed++;
+      }
+    }
+  }
+
+  function isCenter(x,y) {
+    return x === Math.floor(COLS/2) && y === Math.floor(ROWS/2);
+  }
+
+  function fillResources() {
     for(let y=0;y<ROWS;y++){
       for(let x=0;x<COLS;x++){
-        const px = x * TILE;
-        const py = y * TILE;
-        ctx.fillStyle = '#08202a';
-        ctx.fillRect(px, py, TILE-1, TILE-1);
-
         const tile = map[y][x];
-        if(tile.resource && tile.discovered){
-          const img = images[tile.resource];
-          if(img && img.complete){
-            ctx.drawImage(img, px+4, py+4, TILE-8, TILE-8);
-          }
-        }
+        if(tile.type !== 'empty' || tile.structure) continue;
+        const roll = Math.random();
+        if(roll < 0.18) tile.type = 'cave';
+        else if(roll < 0.42) tile.type = 'forest';
+        else if(roll < 0.62) tile.type = 'rock';
       }
     }
-
-    // marcador explorador
-    ctx.fillStyle = 'rgba(60,180,75,0.95)';
-    ctx.beginPath();
-    ctx.arc(explorer.x*TILE + TILE/2, explorer.y*TILE + TILE/2, TILE/3, 0, Math.PI*2);
-    ctx.fill();
-
-    // niebla
-    ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.88)';
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-    // revelar círculo por cada tile descubierto
-    for(let y=0;y<ROWS;y++){
-      for(let x=0;x<COLS;x++){
-        if(map[y][x].discovered){
-          const cx = x*TILE + TILE/2;
-          const cy = y*TILE + TILE/2;
-          ctx.globalCompositeOperation = 'destination-out';
-          ctx.beginPath();
-          ctx.arc(cx, cy, TILE*1.2, 0, Math.PI*2);
-          ctx.fill();
-          ctx.globalCompositeOperation = 'source-over';
-        }
-      }
-    }
-    ctx.restore();
   }
 
-  function revealAround(x,y,radius=1){
-    for(let dy=-radius;dy<=radius;dy++){
-      for(let dx=-radius;dx<=radius;dx++){
-        const nx = x+dx, ny = y+dy;
+  function isAdjacentDiscovered(x,y) {
+    const neighbors = [
+      [x-1,y],[x+1,y],[x,y-1],[x,y+1],
+      [x-1,y-1],[x-1,y+1],[x+1,y-1],[x+1,y+1]
+    ];
+    return neighbors.some(([nx,ny]) => nx>=0 && nx<COLS && ny>=0 && ny<ROWS && map[ny][nx].discovered);
+  }
+
+  function revealAround(x,y) {
+    for(let dy=-1;dy<=1;dy++){
+      for(let dx=-1;dx<=1;dx++){
+        const nx = x + dx;
+        const ny = y + dy;
         if(nx>=0 && nx<COLS && ny>=0 && ny<ROWS){
           map[ny][nx].discovered = true;
         }
@@ -108,63 +136,301 @@
     }
   }
 
-  function moveExplorerTo(tileX,tileY){
-    explorer.x = tileX; explorer.y = tileY;
-    revealAround(tileX, tileY, explorer.vision);
-    // recoger recurso en la casilla
-    const tile = map[tileY][tileX];
-    if(tile.resource){
-      collected++;
-      document.getElementById('collected-count').textContent = collected;
-      tile.resource = null;
-      addLog(`Explorador recogió un recurso en (${tileX},${tileY}).`);
+  function drawGrid() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    for(let y=0;y<ROWS;y++){
+      for(let x=0;x<COLS;x++){
+        const px = x * TILE;
+        const py = y * TILE;
+        ctx.fillStyle = '#09111e';
+        ctx.fillRect(px, py, TILE-1, TILE-1);
+
+        const tile = map[y][x];
+        if(tile.discovered){
+          if(tile.type && assetImages[tile.type]?.complete){
+            ctx.drawImage(assetImages[tile.type], px+4, py+4, TILE-8, TILE-8);
+          }
+          if(tile.units.caballero > 0) {
+            ctx.drawImage(assetImages.caballero, px+6, py+6, TILE/2.2, TILE/2.2);
+          }
+          if(tile.units.arquero > 0) {
+            ctx.drawImage(assetImages.arquero, px+TILE/2, py+6, TILE/2.2, TILE/2.2);
+          }
+        }
+
+        if(!tile.discovered){
+          ctx.fillStyle = 'rgba(0,0,0,0.90)';
+          ctx.fillRect(px, py, TILE-1, TILE-1);
+        }
+
+        if(selectedTile && selectedTile.x === x && selectedTile.y === y){
+          ctx.strokeStyle = '#7c3aed';
+          ctx.lineWidth = 3;
+          ctx.strokeRect(px+1.5, py+1.5, TILE-4, TILE-4);
+        }
+      }
     }
-    drawGrid();
   }
 
-  function addLog(msg){
+  function formatNumber(value) {
+    return value.toString();
+  }
+
+  function updateInventoryPanel() {
+    const container = document.getElementById('inventory-panel');
+    if(!container) return;
+    container.innerHTML = '';
+    const rows = [
+      { icon: 'talador', label: 'Madera', value: inventory.madera },
+      { icon: 'minero', label: 'Piedra', value: inventory.piedra },
+      { icon: 'constructor', label: 'Mineral', value: inventory.mineral },
+      { icon: 'constructor', label: 'Oro', value: inventory.oro },
+      { icon: 'constructor', label: 'Hierro', value: inventory.hierro },
+      { icon: 'constructor', label: 'Cobre', value: inventory.cobre },
+      { icon: 'caballero', label: 'Caballeros', value: inventory.caballeros },
+      { icon: 'arquero', label: 'Arqueros', value: inventory.arqueros }
+    ];
+    rows.forEach(row => {
+      const item = document.createElement('div');
+      item.className = 'inventory-row';
+      const left = document.createElement('span');
+      left.innerHTML = `<img src="${encodeURI(ASSETS[row.icon])}" alt="${row.label}" /> ${row.label}`;
+      const right = document.createElement('span');
+      right.textContent = formatNumber(row.value);
+      item.appendChild(left);
+      item.appendChild(right);
+      container.appendChild(item);
+    });
+  }
+
+  function addLog(message) {
     const log = document.getElementById('battle-log');
     if(!log) return;
     const now = new Date();
-    const time = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-    log.textContent = `${time} — ${msg}\n${log.textContent}`;
+    const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    log.textContent = `${time} — ${message}\n${log.textContent}`;
   }
 
-  canvas.addEventListener('click', (e)=>{
-    const rect = canvas.getBoundingClientRect();
-    const cx = (e.clientX - rect.left) * (canvas.width/rect.width);
-    const cy = (e.clientY - rect.top) * (canvas.height/rect.height);
-    const tx = Math.floor(cx / TILE);
-    const ty = Math.floor(cy / TILE);
-    if(tx>=0 && tx<COLS && ty>=0 && ty<ROWS){
-      moveExplorerTo(tx, ty);
-    }
-  });
-
-  document.getElementById('reveal-random').addEventListener('click', ()=>{
-    const rx = Math.floor(Math.random()*COLS);
-    const ry = Math.floor(Math.random()*ROWS);
-    moveExplorerTo(rx, ry);
-  });
-
-  document.getElementById('reset-map').addEventListener('click', ()=>{
-    for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
-      map[y][x].discovered = false;
-      map[y][x].resource = Math.random() < 0.12 ? assets[Math.floor(Math.random()*assets.length)] : null;
-    }
-    explorer = { x: Math.floor(COLS/2), y: Math.floor(ROWS/2), vision: 2 };
-    collected = 0; document.getElementById('collected-count').textContent = collected;
-    map[explorer.y][explorer.x].discovered = true;
+  function selectTile(x,y) {
+    selectedTile = map[y][x];
+    renderSelectedInfo();
     drawGrid();
+  }
+
+  function canDiscover(x,y) {
+    return map[y][x].discovered || isAdjacentDiscovered(x,y);
+  }
+
+  function gatherTile(tile) {
+    if(!tile.discovered) return;
+    if(tile.type === 'forest' && !tile.collected) {
+      tile.collected = true;
+      tile.type = 'empty';
+      inventory.madera += 8;
+      totalCollected += 8;
+      addLog('Recolección: obtuviste madera de los árboles.');
+    } else if(tile.type === 'rock' && !tile.collected) {
+      tile.collected = true;
+      tile.type = 'empty';
+      inventory.piedra += 10;
+      totalCollected += 10;
+      addLog('Recolección: obtuviste piedra de las rocas.');
+    } else if(tile.type === 'cave') {
+      inventory.piedra += 4;
+      inventory.mineral += 3;
+      totalCollected += 7;
+      if(Math.random() < 0.25) inventory.oro += 1;
+      if(Math.random() < 0.25) inventory.hierro += 1;
+      if(Math.random() < 0.20) inventory.cobre += 1;
+      addLog('Cueva: extraíste piedra, mineral y minerales especiales. La cueva es infinita.');
+    } else {
+      addLog('No hay nada que recolectar aquí.');
+    }
+    updateCounters();
+    updateInventoryPanel();
+    drawGrid();
+  }
+
+  function buildUnit(unitType) {
+    if(!selectedTile || selectedTile.structure !== 'barracks') return;
+    const cost = unitType === 'caballero'
+      ? { piedra: 6, mineral: 8, hierro: 5 }
+      : { madera: 8, mineral: 6, cobre: 4 };
+    const canPay = Object.entries(cost).every(([key, amount]) => inventory[key] >= amount);
+    if(!canPay) {
+      addLog('No tienes suficientes recursos para crear la unidad.');
+      return;
+    }
+    Object.entries(cost).forEach(([key, amount]) => inventory[key] -= amount);
+    selectedTile.units[unitType] += 1;
+    inventory[unitType + 's'] += 1;
+    addLog(`Se creó un ${unitType} en la barraca.`);
+    updateCounters();
+    updateInventoryPanel();
+    renderSelectedInfo();
+    drawGrid();
+  }
+
+  function repairStructure(tile) {
+    if(!tile || !tile.structure) return;
+    const maxHealth = structureHealth[tile.structure];
+    if(tile.structureHealth >= maxHealth) {
+      addLog('La estructura ya está en buen estado.');
+      return;
+    }
+    const cost = { mineral: 6, oro: 2, hierro: 4, cobre: 3 };
+    const canPay = Object.entries(cost).every(([key, amount]) => inventory[key] >= amount);
+    if(!canPay) {
+      addLog('No tienes suficientes minerales, oro, hierro o cobre para reparar.');
+      return;
+    }
+    Object.entries(cost).forEach(([key, amount]) => inventory[key] -= amount);
+    tile.structureHealth = Math.min(maxHealth, tile.structureHealth + 40);
+    addLog(`Reparaste la estructura ${tile.structure}. Salud: ${tile.structureHealth}/${maxHealth}.`);
+    updateCounters();
+    updateInventoryPanel();
+    renderSelectedInfo();
+  }
+
+  function updateCounters() {
+    document.getElementById('collected-count').textContent = totalCollected;
+  }
+
+  function renderSelectedInfo() {
+    const info = document.getElementById('selected-info');
+    if(!info) return;
+    if(!selectedTile) {
+      info.innerHTML = '<p>Haz clic en un tile descubierto para ver detalles.</p>';
+      return;
+    }
+    const typeLabel = selectedTile.structure ? selectedTile.structure : selectedTile.type || 'vacío';
+    const x = selectedTile.x;
+    const y = selectedTile.y;
+    let description = '';
+    let buttons = '';
+    if(selectedTile.type === 'forest') {
+      description = 'Bosque: da madera y se consume cuando recolectas.';
+      buttons = `<button class="button" onclick="window.mapActions.gather()">Recolectar madera</button>`;
+    } else if(selectedTile.type === 'rock') {
+      description = 'Roca: da piedra y se consume al recolectarla.';
+      buttons = `<button class="button" onclick="window.mapActions.gather()">Minar piedra</button>`;
+    } else if(selectedTile.type === 'cave') {
+      description = 'Cueva: da piedra infinita, mineral y a veces oro, hierro o cobre.';
+      buttons = `<button class="button" onclick="window.mapActions.gather()">Extraer de la cueva</button>`;
+    } else if(selectedTile.structure === 'barracks') {
+      description = 'Barracas: crea caballero y arquero. Usa recursos para construir unidades.';
+      buttons = `
+        <button class="button" onclick="window.mapActions.build('caballero')">Crear caballero</button>
+        <button class="button" onclick="window.mapActions.build('arquero')">Crear arquero</button>
+        <button class="button secondary" onclick="window.mapActions.repair()">Reparar estructura</button>
+      `;
+    } else if(selectedTile.structure === 'castle') {
+      description = 'Castillo: tu base central. Repara usando minerales, oro, hierro y cobre.';
+      buttons = `<button class="button secondary" onclick="window.mapActions.repair()">Reparar castillo</button>`;
+    } else {
+      description = 'Terreno despejado. Explora más para encontrar recursos.';
+    }
+    let statusText = `<div class="info-row"><span><strong>Tile:</strong> ${typeLabel}</span><span>${x}, ${y}</span></div>`;
+    if(selectedTile.structure) {
+      statusText += `<div class="info-row"><span><strong>Salud:</strong></span><span>${selectedTile.structureHealth}/${structureHealth[selectedTile.structure]}</span></div>`;
+    }
+    if(selectedTile.type === 'forest' || selectedTile.type === 'rock') {
+      const remaining = selectedTile.collected ? 'No quedan recursos' : 'Recurso disponible';
+      statusText += `<div class="info-row"><span>${remaining}</span></div>`;
+    }
+    if(selectedTile.structure === 'barracks') {
+      statusText += `<div class="info-row"><span>Caballeros:</span><span>${selectedTile.units.caballero}</span></div>`;
+      statusText += `<div class="info-row"><span>Arqueros:</span><span>${selectedTile.units.arquero}</span></div>`;
+    }
+    info.innerHTML = `
+      ${statusText}
+      <p class="status-note">${description}</p>
+      <div class="action-buttons">${buttons}</div>
+    `;
+  }
+
+  function trySelectTile(x,y) {
+    const tile = map[y][x];
+    if(!tile.discovered) {
+      if(!canDiscover(x,y)) {
+        addLog('Debes explorar desde un borde descubierto para llegar ahí.');
+        return;
+      }
+      tile.discovered = true;
+      revealAround(x,y);
+      addLog(`Descubriste una nueva zona en (${x},${y}).`);
+    }
+    selectTile(x,y);
+  }
+
+  function getRandomUndiscoveredNeighbor() {
+    const candidates = [];
+    for(let y=0;y<ROWS;y++){
+      for(let x=0;x<COLS;x++){
+        const tile = map[y][x];
+        if(!tile.discovered && isAdjacentDiscovered(x,y)) candidates.push({x,y});
+      }
+    }
+    return candidates.length ? candidates[Math.floor(Math.random()*candidates.length)] : null;
+  }
+
+  function autoExplore() {
+    const target = getRandomUndiscoveredNeighbor();
+    if(target) {
+      trySelectTile(target.x, target.y);
+    } else {
+      addLog('No hay más zonas adyacentes para revelar. Explora manualmente otras áreas.');
+    }
+  }
+
+  canvas.addEventListener('click', (event)=>{
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = Math.floor((event.clientX - rect.left) * scaleX / TILE);
+    const y = Math.floor((event.clientY - rect.top) * scaleY / TILE);
+    if(x>=0 && x<COLS && y>=0 && y<ROWS){
+      trySelectTile(x,y);
+    }
   });
 
-  // wait for images to load a bit before drawing
-  const waitInterval = setInterval(()=>{
-    if(loaded >= Math.max(4, assets.length/3)){
-      clearInterval(waitInterval);
-      revealAround(explorer.x, explorer.y, explorer.vision);
-      drawGrid();
-    }
-  }, 120);
+  document.getElementById('reveal-random').addEventListener('click', autoExplore);
+  document.getElementById('reset-map').addEventListener('click', ()=>{
+    Object.keys(inventory).forEach(key => inventory[key] = 0);
+    totalCollected = 0;
+    updateCounters();
+    buildMap();
+    updateInventoryPanel();
+    renderSelectedInfo();
+    drawGrid();
+    addLog('El mapa se reinició. Tu castillo está de nuevo en el centro.');
+  });
 
+  window.mapActions = {
+    gather() {
+      if(!selectedTile) return;
+      gatherTile(selectedTile);
+    },
+    build(type) {
+      buildUnit(type);
+    },
+    repair() {
+      if(!selectedTile) return;
+      repairStructure(selectedTile);
+    }
+  };
+
+  function drawLoop() {
+    if(readyCount >= Object.keys(ASSETS).length) {
+      drawGrid();
+    } else {
+      requestAnimationFrame(drawLoop);
+    }
+  }
+
+  buildMap();
+  updateInventoryPanel();
+  renderSelectedInfo();
+  updateCounters();
+  drawLoop();
 })();
