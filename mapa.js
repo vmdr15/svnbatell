@@ -35,6 +35,7 @@
     oro: 0,
     hierro: 0,
     cobre: 0,
+    mineros: 0,
     caballeros: 0,
     arqueros: 0
   };
@@ -78,29 +79,29 @@
     castleTile.structureHealth = structureHealth.castle;
     castleTile.collected = true;
 
-    placeStructures('barracks', 3, tile => tile.type === 'empty');
+    createEmptyRing(center.x, center.y);
     fillResources();
     selectedTile = castleTile;
   }
 
-  function placeStructures(type, count, predicate) {
-    let placed = 0;
-    while(placed < count) {
-      const x = Math.floor(Math.random()*COLS);
-      const y = Math.floor(Math.random()*ROWS);
-      const tile = map[y][x];
-      if(predicate(tile) && !isCenter(x,y)){
-        tile.type = type;
-        tile.structure = type;
-        tile.structureHealth = structureHealth[type];
-        tile.collected = true;
-        placed++;
-      }
-    }
-  }
-
   function isCenter(x,y) {
     return x === Math.floor(COLS/2) && y === Math.floor(ROWS/2);
+  }
+
+  function createEmptyRing(cx, cy) {
+    for(let dy=-1; dy<=1; dy++){
+      for(let dx=-1; dx<=1; dx++){
+        if(dx === 0 && dy === 0) continue;
+        const x = cx + dx;
+        const y = cy + dy;
+        if(x>=0 && x<COLS && y>=0 && y<ROWS){
+          const tile = map[y][x];
+          tile.type = 'empty';
+          tile.discovered = true;
+          tile.collected = true;
+        }
+      }
+    }
   }
 
   function fillResources() {
@@ -150,6 +151,9 @@
           if(tile.type && assetImages[tile.type]?.complete){
             ctx.drawImage(assetImages[tile.type], px+4, py+4, TILE-8, TILE-8);
           }
+          if(tile.structure === 'castle' && inventory.mineros > 0 && assetImages.minero.complete) {
+            ctx.drawImage(assetImages.minero, px+6, py+6, TILE/2.2, TILE/2.2);
+          }
           if(tile.units.caballero > 0) {
             ctx.drawImage(assetImages.caballero, px+6, py+6, TILE/2.2, TILE/2.2);
           }
@@ -182,11 +186,12 @@
     container.innerHTML = '';
     const rows = [
       { icon: 'talador', label: 'Madera', value: inventory.madera },
-      { icon: 'minero', label: 'Piedra', value: inventory.piedra },
+      { icon: 'roca', label: 'Piedra', value: inventory.piedra },
       { icon: 'constructor', label: 'Mineral', value: inventory.mineral },
       { icon: 'constructor', label: 'Oro', value: inventory.oro },
       { icon: 'constructor', label: 'Hierro', value: inventory.hierro },
       { icon: 'constructor', label: 'Cobre', value: inventory.cobre },
+      { icon: 'minero', label: 'Mineros', value: inventory.mineros },
       { icon: 'caballero', label: 'Caballeros', value: inventory.caballeros },
       { icon: 'arquero', label: 'Arqueros', value: inventory.arqueros }
     ];
@@ -325,8 +330,14 @@
         <button class="button secondary" onclick="window.mapActions.repair()">Reparar estructura</button>
       `;
     } else if(selectedTile.structure === 'castle') {
-      description = 'Castillo: tu base central. Repara usando minerales, oro, hierro y cobre.';
-      buttons = `<button class="button secondary" onclick="window.mapActions.repair()">Reparar castillo</button>`;
+      description = 'Castillo: tu base central. Repara usando minerales, oro, hierro y cobre. Aquí puedes crear mineros.';
+      buttons = `
+        <button class="button" onclick="window.mapActions.buildMiner()">Crear minero</button>
+        <button class="button secondary" onclick="window.mapActions.repair()">Reparar castillo</button>
+      `;
+    } else if(selectedTile.type === 'empty' && canBuildBarracks(selectedTile)) {
+      description = 'Terreno vacío junto al castillo. Construye barracas para entrenar unidades.';
+      buttons = `<button class="button" onclick="window.mapActions.buildBarracks()">Construir barracas</button>`;
     } else {
       description = 'Terreno despejado. Explora más para encontrar recursos.';
     }
@@ -341,6 +352,9 @@
     if(selectedTile.structure === 'barracks') {
       statusText += `<div class="info-row"><span>Caballeros:</span><span>${selectedTile.units.caballero}</span></div>`;
       statusText += `<div class="info-row"><span>Arqueros:</span><span>${selectedTile.units.arquero}</span></div>`;
+    }
+    if(selectedTile.structure === 'castle') {
+      statusText += `<div class="info-row"><span>Mineros:</span><span>${inventory.mineros}</span></div>`;
     }
     info.innerHTML = `
       ${statusText}
@@ -361,6 +375,48 @@
       addLog(`Descubriste una nueva zona en (${x},${y}).`);
     }
     selectTile(x,y);
+  }
+
+  function canBuildBarracks(tile) {
+    return tile.discovered && tile.type === 'empty' && !tile.structure && isAdjacentToCastle(tile.x, tile.y);
+  }
+
+  function isAdjacentToCastle(x,y) {
+    const neighbors = [[x-1,y],[x+1,y],[x,y-1],[x,y+1]];
+    return neighbors.some(([nx,ny]) => nx>=0 && nx<COLS && ny>=0 && ny<ROWS && map[ny][nx].structure === 'castle');
+  }
+
+  function buildBarracks(tile) {
+    const cost = { madera: 100, piedra: 50 };
+    const canPay = Object.entries(cost).every(([key, amount]) => inventory[key] >= amount);
+    if(!canPay) {
+      addLog('No tienes suficientes recursos para construir barracas.');
+      return;
+    }
+    Object.entries(cost).forEach(([key, amount]) => inventory[key] -= amount);
+    tile.type = 'barracks';
+    tile.structure = 'barracks';
+    tile.structureHealth = structureHealth.barracks;
+    tile.collected = true;
+    addLog('Construiste unas barracas en el mapa.');
+    updateInventoryPanel();
+    renderSelectedInfo();
+    drawGrid();
+  }
+
+  function buildMiner() {
+    if(!selectedTile || selectedTile.structure !== 'castle') return;
+    const cost = { madera: 100, piedra: 50 };
+    const canPay = Object.entries(cost).every(([key, amount]) => inventory[key] >= amount);
+    if(!canPay) {
+      addLog('No tienes suficientes recursos para crear un minero.');
+      return;
+    }
+    Object.entries(cost).forEach(([key, amount]) => inventory[key] -= amount);
+    inventory.mineros += 1;
+    addLog('Creaste un minero en el castillo.');
+    updateInventoryPanel();
+    renderSelectedInfo();
   }
 
   function getRandomUndiscoveredNeighbor() {
@@ -413,6 +469,13 @@
     },
     build(type) {
       buildUnit(type);
+    },
+    buildBarracks() {
+      if(!selectedTile) return;
+      buildBarracks(selectedTile);
+    },
+    buildMiner() {
+      buildMiner();
     },
     repair() {
       if(!selectedTile) return;
