@@ -104,17 +104,68 @@
     }
   }
 
-  function fillResources() {
+  function getEmptyTiles(predicate) {
+    const tiles = [];
     for(let y=0;y<ROWS;y++){
       for(let x=0;x<COLS;x++){
         const tile = map[y][x];
-        if(tile.type !== 'empty' || tile.structure) continue;
-        const roll = Math.random();
-        if(roll < 0.18) tile.type = 'cave';
-        else if(roll < 0.42) tile.type = 'forest';
-        else if(roll < 0.62) tile.type = 'rock';
+        if(tile.type === 'empty' && !tile.structure && (!predicate || predicate(tile))) {
+          tiles.push(tile);
+        }
       }
     }
+    return tiles;
+  }
+
+  function getNeighbors(tile) {
+    const positions = [
+      [tile.x-1, tile.y], [tile.x+1, tile.y],
+      [tile.x, tile.y-1], [tile.x, tile.y+1]
+    ];
+    return positions
+      .filter(([nx,ny]) => nx>=0 && nx<COLS && ny>=0 && ny<ROWS)
+      .map(([nx,ny]) => map[ny][nx]);
+  }
+
+  function placeCluster(type, minSize, maxSize) {
+    const emptyTiles = getEmptyTiles();
+    if(emptyTiles.length === 0) return;
+    const start = emptyTiles[Math.floor(Math.random() * emptyTiles.length)];
+    start.type = type;
+    start.collected = false;
+    let cluster = [start];
+    const targetSize = minSize + Math.floor(Math.random() * (maxSize - minSize + 1));
+    while(cluster.length < targetSize) {
+      const borders = [];
+      cluster.forEach(tile => {
+        getNeighbors(tile).forEach(neighbor => {
+          if(neighbor.type === 'empty' && !neighbor.structure && !borders.includes(neighbor)) {
+            borders.push(neighbor);
+          }
+        });
+      });
+      if(borders.length === 0) break;
+      const next = borders[Math.floor(Math.random() * borders.length)];
+      next.type = type;
+      next.collected = false;
+      cluster.push(next);
+    }
+  }
+
+  function placeCaves(limit) {
+    for(let i=0;i<limit;i++){
+      const empties = getEmptyTiles(tile => !isAdjacentToCastle(tile.x, tile.y));
+      if(empties.length === 0) break;
+      const chosen = empties[Math.floor(Math.random() * empties.length)];
+      chosen.type = 'cave';
+      chosen.collected = false;
+    }
+  }
+
+  function fillResources() {
+    placeCaves(2);
+    for(let i=0;i<5;i++) placeCluster('rock', 2, 4);
+    for(let i=0;i<5;i++) placeCluster('forest', 2, 4);
   }
 
   function isAdjacentDiscovered(x,y) {
