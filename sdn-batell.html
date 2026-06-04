@@ -190,6 +190,15 @@
     </section>
 
     <section class="card battle-grid">
+      <div class="panel" style="grid-column: 1 / -1;">
+        <h2>Mapa de exploración</h2>
+        <canvas id="explore-map" width="800" height="420" style="width:100%;max-width:880px;border-radius:12px;display:block;background:#06101a;border:1px solid rgba(255,255,255,0.04);"></canvas>
+        <div style="margin-top:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <button class="button" id="reveal-random">Revelar aleatorio</button>
+          <button class="button secondary" id="reset-map">Reiniciar mapa</button>
+          <div style="margin-left:auto;color:#cbd5e1;font-weight:700;">Materiales recolectados: <span id="collected-count">0</span></div>
+        </div>
+      </div>
       <div class="panel">
         <h2>Estado del combate</h2>
         <div class="stats">
@@ -227,6 +236,7 @@
       <span style="color:#9ca3af;">Juego creado con lógica en <code>juego.js</code>.</span>
     </div>
   </main>
+  <script src="mapa.js" defer></script>
   <script src="juego.js" defer></script>
 </body>
 </html>
