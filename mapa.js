@@ -17,6 +17,9 @@
     constructor: 'elementos/constructor.gif',
     minero: 'elementos/minero.gif',
     talador: 'elementos/talador.gif',
+    oro: 'elementos/oro.gif',
+    hierro: 'elementos/hierro.gif',
+    cobre: 'elementos/cobre item.gif',
     madera: 'elementos/madera item.gif',
     piedra: 'elementos/piedra item.gif'
   };
@@ -296,9 +299,9 @@
       { icon: 'madera', label: 'Madera', value: inventory.madera },
       { icon: 'piedra', label: 'Piedra', value: inventory.piedra },
       { icon: 'constructor', label: 'Mineral', value: inventory.mineral },
-      { icon: 'constructor', label: 'Oro', value: inventory.oro },
-      { icon: 'constructor', label: 'Hierro', value: inventory.hierro },
-      { icon: 'constructor', label: 'Cobre', value: inventory.cobre },
+      { icon: 'oro', label: 'Oro', value: inventory.oro },
+      { icon: 'hierro', label: 'Hierro', value: inventory.hierro },
+      { icon: 'cobre', label: 'Cobre', value: inventory.cobre },
       { icon: 'minero', label: 'Mineros', value: inventory.mineros },
       { icon: 'caballero', label: 'Caballeros', value: inventory.caballeros },
       { icon: 'arquero', label: 'Arqueros', value: inventory.arqueros }
@@ -358,7 +361,7 @@
       if(Math.random() < 0.25) inventory.oro += 1;
       if(Math.random() < 0.25) inventory.hierro += 1;
       if(Math.random() < 0.20) inventory.cobre += 1;
-      addLog('Cueva: extraíste piedra, mineral y minerales especiales. La cueva es infinita.');
+      addLog('Cueva: extraíste piedra, mineral y recursos especiales. La cueva es infinita.');
     } else {
       addLog('No hay nada que recolectar aquí.');
     }
@@ -397,7 +400,7 @@
     const cost = { mineral: 6, oro: 2, hierro: 4, cobre: 3 };
     const canPay = Object.entries(cost).every(([key, amount]) => inventory[key] >= amount);
     if(!canPay) {
-      addLog('No tienes suficientes minerales, oro, hierro o cobre para reparar.');
+      addLog('No tienes suficientes mineral, oro, hierro o cobre para reparar.');
       return;
     }
     Object.entries(cost).forEach(([key, amount]) => inventory[key] -= amount);
@@ -441,7 +444,7 @@
         <button class="button secondary" onclick="window.mapActions.repair()">Reparar estructura</button>
       `;
     } else if(selectedTile.structure === 'castle') {
-      description = 'Castillo: tu base central. Repara usando minerales, oro, hierro y cobre. Aquí puedes crear mineros.';
+      description = 'Castillo: tu base central. Repara usando mineral, oro, hierro y cobre. Aquí puedes crear mineros.';
       buttons = `
         <button class="button" onclick="window.mapActions.buildMiner()">Crear minero</button>
         <button class="button secondary" onclick="window.mapActions.repair()">Reparar castillo</button>
