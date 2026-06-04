@@ -16,7 +16,9 @@
     arquero: 'elementos/arquero.gif',
     constructor: 'elementos/constructor.gif',
     minero: 'elementos/minero.gif',
-    talador: 'elementos/talador.gif'
+    talador: 'elementos/talador.gif',
+    madera: 'elementos/madera item.gif',
+    piedra: 'elementos/piedra item.gif'
   };
 
   const assetImages = {};
@@ -236,8 +238,8 @@
     if(!container) return;
     container.innerHTML = '';
     const rows = [
-      { icon: 'talador', label: 'Madera', value: inventory.madera },
-      { icon: 'roca', label: 'Piedra', value: inventory.piedra },
+      { icon: 'madera', label: 'Madera', value: inventory.madera },
+      { icon: 'piedra', label: 'Piedra', value: inventory.piedra },
       { icon: 'constructor', label: 'Mineral', value: inventory.mineral },
       { icon: 'constructor', label: 'Oro', value: inventory.oro },
       { icon: 'constructor', label: 'Hierro', value: inventory.hierro },
