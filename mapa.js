@@ -56,6 +56,7 @@
   const movingUnits = [];
   const enemyUnits = [];
   const WAVE_INTERVAL_MS = 240000;
+  let enemyWaveInterval = null;
   let nextWaveTimestamp = Date.now() + WAVE_INTERVAL_MS;
   let currentStructureChoice = null;
   let castleCoords = { x: Math.floor(COLS / 2), y: Math.floor(ROWS / 2) };
@@ -666,7 +667,7 @@
   }
 
   function updateEnemyUnits() {
-    const duration = 120;
+    const duration = 240;
     for(let i = enemyUnits.length - 1; i >= 0; i--) {
       const enemy = enemyUnits[i];
       if(enemy.arrived) continue;
@@ -708,9 +709,16 @@
     timer.textContent = formatWaveTimer(remaining);
   }
 
-  function startEnemyWaves() {
-    spawnEnemyWave();
-    setInterval(spawnEnemyWave, WAVE_INTERVAL_MS);
+  function startEnemyWaves(spawnImmediate = true) {
+    if(enemyWaveInterval) {
+      clearInterval(enemyWaveInterval);
+      enemyWaveInterval = null;
+    }
+    if(spawnImmediate) {
+      spawnEnemyWave();
+    }
+    nextWaveTimestamp = Date.now() + WAVE_INTERVAL_MS;
+    enemyWaveInterval = setInterval(spawnEnemyWave, WAVE_INTERVAL_MS);
   }
 
   function updateMovingUnits() {
@@ -749,21 +757,34 @@
     addLog('Seleccionaste la barraca como estructura para construir.');
   }
 
+  function findBuildableBarracksTile() {
+    for(let y = 0; y < ROWS; y++) {
+      for(let x = 0; x < COLS; x++) {
+        const tile = map[y][x];
+        if(canBuildBarracks(tile)) return tile;
+      }
+    }
+    return null;
+  }
+
   function buildSelectedStructure() {
     if(!currentStructureChoice) {
       addLog('Primero elige una estructura para construir.');
       return;
     }
-    if(!selectedTile) {
-      addLog('Selecciona un terreno vacío junto al castillo para construir.');
-      return;
-    }
+    let tile = selectedTile;
     if(currentStructureChoice === 'barracks') {
-      if(!canBuildBarracks(selectedTile)) {
-        addLog('Debes elegir un terreno vacío junto al castillo para construir barracas.');
+      if(!tile || !canBuildBarracks(tile)) {
+        tile = findBuildableBarracksTile();
+      }
+      if(!tile) {
+        addLog('No hay un terreno vacío junto al castillo para construir barracas. Selecciona uno o explora más.');
         return;
       }
-      buildBarracks(selectedTile);
+      if(selectedTile !== tile) {
+        selectTile(tile.x, tile.y);
+      }
+      buildBarracks(tile);
       return;
     }
     addLog('Esa estructura no está disponible.');
@@ -805,6 +826,13 @@
     Object.keys(inventory).forEach(key => inventory[key] = 0);
     totalCollected = 0;
     currentStructureChoice = null;
+    enemyUnits.length = 0;
+    movingUnits.length = 0;
+    if(enemyWaveInterval) {
+      clearInterval(enemyWaveInterval);
+      enemyWaveInterval = null;
+    }
+    nextWaveTimestamp = Date.now() + WAVE_INTERVAL_MS;
     const chooseButton = document.getElementById('choose-structure');
     if(chooseButton) chooseButton.textContent = 'Elegir barraca';
     updateCounters();
@@ -812,6 +840,7 @@
     updateInventoryPanel();
     renderSelectedInfo();
     drawGrid();
+    startEnemyWaves(false);
     addLog('El mapa se reinició. Tu castillo está de nuevo en el centro.');
   });
   document.getElementById('choose-structure').addEventListener('click', ()=>chooseStructure('barracks'));
