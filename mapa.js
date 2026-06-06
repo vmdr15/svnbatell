@@ -400,11 +400,19 @@
       scheduleTreeRegrow(tile);
       addLog('Un leñador parte hacia el árbol. Los recursos se sumarán cuando regrese al castillo.');
     } else if(tile.type === 'rock' && !tile.collected) {
+      if(inventory.mineros <= 0) {
+        addLog('Necesitas mineros para minar piedra. Crea mineros en el castillo.');
+        return;
+      }
       createWorkerTask(tile, { piedra: 10 });
       tile.collected = true;
       tile.type = 'empty';
       addLog('Un minero parte hacia la roca. Los recursos se sumarán cuando regrese al castillo.');
     } else if(tile.type === 'cave') {
+      if(inventory.mineros <= 0) {
+        addLog('Necesitas mineros para extraer de la cueva. Crea mineros en el castillo.');
+        return;
+      }
       const resources = {
         piedra: 4,
         mineral: 3,
@@ -480,15 +488,20 @@
     const y = selectedTile.y;
     let description = '';
     let buttons = '';
+    const gatherNeedsMiners = (selectedTile.type === 'rock' || selectedTile.type === 'cave') && inventory.mineros <= 0;
     if(selectedTile.type === 'forest') {
       description = 'Bosque: da madera y se consume cuando recolectas.';
       buttons = `<button class="button" onclick="window.mapActions.gather()">Recolectar madera</button>`;
     } else if(selectedTile.type === 'rock') {
-      description = 'Roca: da piedra y se consume al recolectarla.';
-      buttons = `<button class="button" onclick="window.mapActions.gather()">Minar piedra</button>`;
+      description = inventory.mineros > 0
+        ? 'Roca: da piedra y se consume al recolectarla.'
+        : 'Necesitas mineros para poder extraer piedra.';
+      buttons = `<button class="button" onclick="window.mapActions.gather()" ${gatherNeedsMiners ? 'disabled' : ''}>Minar piedra</button>`;
     } else if(selectedTile.type === 'cave') {
-      description = 'Cueva: da piedra infinita, mineral y a veces oro, hierro o cobre.';
-      buttons = `<button class="button" onclick="window.mapActions.gather()">Extraer de la cueva</button>`;
+      description = inventory.mineros > 0
+        ? 'Cueva: da piedra infinita, mineral y a veces oro, hierro o cobre.'
+        : 'Necesitas mineros para poder extraer de la cueva.';
+      buttons = `<button class="button" onclick="window.mapActions.gather()" ${gatherNeedsMiners ? 'disabled' : ''}>Extraer de la cueva</button>`;
     } else if(selectedTile.structure === 'barracks') {
       description = 'Barracas: crea caballero y arquero. Usa recursos para construir unidades.';
       buttons = `
