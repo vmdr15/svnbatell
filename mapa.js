@@ -243,15 +243,28 @@
     return 'minero';
   }
 
-  function createWorkerTask(tile) {
+  function createWorkerTask(tile, resources = {}) {
     const workerType = getWorkerIconType(tile.type);
     activeWorkers.push({
       type: workerType,
       from: { ...castleCoords },
       to: { x: tile.x, y: tile.y },
       progress: 0,
-      phase: 'going'
+      phase: 'going',
+      resources
     });
+  }
+
+  function scheduleTreeRegrow(tile) {
+    setTimeout(() => {
+      if(tile.type === 'empty' && tile.collected && !tile.structure) {
+        tile.type = 'forest';
+        tile.collected = false;
+        addLog('Un árbol ha vuelto a crecer en el bosque.');
+        if(selectedTile === tile) renderSelectedInfo();
+        drawGrid();
+      }
+    }, 300000);
   }
 
   function updateWorkers() {
@@ -283,8 +296,23 @@
           worker.phase = 'returning';
           worker.progress = 0;
         } else {
+          if(worker.resources) {
+            const gained = [];
+            Object.entries(worker.resources).forEach(([key, value]) => {
+              if(value > 0) {
+                inventory[key] = (inventory[key] || 0) + value;
+                totalCollected += value;
+                gained.push(`${value} ${key}`);
+              }
+            });
+            if(gained.length > 0) {
+              addLog(`El ${worker.type} regresó con ${gained.join(', ')} al castillo.`);
+              updateCounters();
+              updateInventoryPanel();
+              if(selectedTile && selectedTile.structure === 'castle') renderSelectedInfo();
+            }
+          }
           activeWorkers.splice(i, 1);
-          addLog(`El ${worker.type} regresó al castillo.`);
         }
       }
     }
@@ -359,28 +387,26 @@
   function gatherTile(tile) {
     if(!tile.discovered) return;
     if(tile.type === 'forest' && !tile.collected) {
-      createWorkerTask(tile);
+      createWorkerTask(tile, { madera: 8 });
       tile.collected = true;
       tile.type = 'empty';
-      inventory.madera += 8;
-      totalCollected += 8;
-      addLog('Recolección: obtuviste madera de los árboles.');
+      scheduleTreeRegrow(tile);
+      addLog('Un leñador parte hacia el árbol. Los recursos se sumarán cuando regrese al castillo.');
     } else if(tile.type === 'rock' && !tile.collected) {
-      createWorkerTask(tile);
+      createWorkerTask(tile, { piedra: 10 });
       tile.collected = true;
       tile.type = 'empty';
-      inventory.piedra += 10;
-      totalCollected += 10;
-      addLog('Recolección: obtuviste piedra de las rocas.');
+      addLog('Un minero parte hacia la roca. Los recursos se sumarán cuando regrese al castillo.');
     } else if(tile.type === 'cave') {
-      createWorkerTask(tile);
-      inventory.piedra += 4;
-      inventory.mineral += 3;
-      totalCollected += 7;
-      if(Math.random() < 0.25) inventory.oro += 1;
-      if(Math.random() < 0.25) inventory.hierro += 1;
-      if(Math.random() < 0.20) inventory.cobre += 1;
-      addLog('Cueva: extraíste piedra, mineral y recursos especiales. La cueva es infinita.');
+      const resources = {
+        piedra: 4,
+        mineral: 3,
+        oro: Math.random() < 0.25 ? 1 : 0,
+        hierro: Math.random() < 0.25 ? 1 : 0,
+        cobre: Math.random() < 0.20 ? 1 : 0
+      };
+      createWorkerTask(tile, resources);
+      addLog('Un minero parte hacia la cueva. Los recursos se sumarán cuando regrese al castillo.');
     } else {
       addLog('No hay nada que recolectar aquí.');
     }
