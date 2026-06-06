@@ -17,6 +17,8 @@
     constructor: 'elementos/constructor.gif',
     minero: 'elementos/minero.gif',
     talador: 'elementos/talador.gif',
+    slime: 'elementos/slime.gif',
+    lagart: 'elementos/lagart (1).gif',
     oro: 'elementos/oro.gif',
     hierro: 'elementos/hierro.gif',
     cobre: 'elementos/cobre item.gif',
@@ -51,6 +53,11 @@
   let totalCollected = 0;
   const structureHealth = { castle: 200, barracks: 120 };
   const activeWorkers = [];
+  const movingUnits = [];
+  const enemyUnits = [];
+  const WAVE_INTERVAL_MS = 240000;
+  let nextWaveTimestamp = Date.now() + WAVE_INTERVAL_MS;
+  let currentStructureChoice = null;
   let castleCoords = { x: Math.floor(COLS / 2), y: Math.floor(ROWS / 2) };
 
   function createTile(type) {
@@ -428,7 +435,8 @@
     Object.entries(cost).forEach(([key, amount]) => inventory[key] -= amount);
     selectedTile.units[unitType] += 1;
     inventory[unitType + 's'] += 1;
-    addLog(`Se creó un ${unitType} en la barraca.`);
+    spawnUnit(unitType, selectedTile);
+    addLog(`Se creó un ${unitType} en la barraca y parte hacia una zona explorada.`);
     updateCounters();
     updateInventoryPanel();
     renderSelectedInfo();
@@ -590,6 +598,164 @@
     renderSelectedInfo();
   }
 
+  function getUnitTarget(startTile) {
+    const candidates = [];
+    for(let y = 0; y < ROWS; y++) {
+      for(let x = 0; x < COLS; x++) {
+        const tile = map[y][x];
+        if(tile.discovered && (tile.x !== startTile.x || tile.y !== startTile.y)) {
+          candidates.push(tile);
+        }
+      }
+    }
+    return candidates.length ? candidates[Math.floor(Math.random() * candidates.length)] : startTile;
+  }
+
+  function spawnUnit(unitType, startTile) {
+    const targetTile = getUnitTarget(startTile);
+    movingUnits.push({
+      type: unitType,
+      start: { x: startTile.x, y: startTile.y },
+      target: { x: targetTile.x, y: targetTile.y },
+      progress: 0,
+      arrived: false
+    });
+  }
+
+  function getEnemySpawnTile() {
+    const candidates = [];
+    for(let x = 0; x < COLS; x++) {
+      candidates.push({ x, y: 0 });
+      candidates.push({ x, y: ROWS - 1 });
+    }
+    for(let y = 1; y < ROWS - 1; y++) {
+      candidates.push({ x: 0, y });
+      candidates.push({ x: COLS - 1, y });
+    }
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
+  function spawnEnemyWave() {
+    const waveCount = 3 + Math.floor(Math.random() * 2);
+    for(let i = 0; i < waveCount; i++) {
+      const spawn = getEnemySpawnTile();
+      const type = i % 2 === 0 ? 'slime' : 'lagart';
+      enemyUnits.push({
+        type,
+        start: { x: spawn.x, y: spawn.y },
+        target: { x: castleCoords.x, y: castleCoords.y },
+        progress: 0,
+        arrived: false
+      });
+    }
+    nextWaveTimestamp = Date.now() + WAVE_INTERVAL_MS;
+    addLog(`Oleada enemiga: ${waveCount} unidades (${waveCount % 2 === 0 ? 'slimes y lagarts' : 'slimes y lagart'}).`);
+  }
+
+  function updateEnemyUnits() {
+    const duration = 120;
+    for(let i = enemyUnits.length - 1; i >= 0; i--) {
+      const enemy = enemyUnits[i];
+      if(enemy.arrived) continue;
+      enemy.progress += 1 / duration;
+      if(enemy.progress >= 1) {
+        enemy.progress = 1;
+        enemy.arrived = true;
+        addLog(`El ${enemy.type} llegó al castillo en oleada y atacó.`);
+        enemyUnits.splice(i, 1);
+      }
+    }
+  }
+
+  function drawEnemyUnits() {
+    enemyUnits.forEach(enemy => {
+      const sx = enemy.start.x * TILE + TILE / 2;
+      const sy = enemy.start.y * TILE + TILE / 2;
+      const ex = enemy.target.x * TILE + TILE / 2;
+      const ey = enemy.target.y * TILE + TILE / 2;
+      const px = sx + (ex - sx) * Math.min(enemy.progress, 1);
+      const py = sy + (ey - sy) * Math.min(enemy.progress, 1);
+      if(assetImages[enemy.type]?.complete) {
+        ctx.drawImage(assetImages[enemy.type], px - TILE/6, py - TILE/6, TILE/3, TILE/3);
+      }
+    });
+  }
+
+  function formatWaveTimer(ms) {
+    const seconds = Math.max(0, Math.ceil(ms / 1000));
+    const min = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const sec = (seconds % 60).toString().padStart(2, '0');
+    return `${min}:${sec}`;
+  }
+
+  function updateWaveTimerDisplay() {
+    const timer = document.getElementById('enemy-wave-timer');
+    if(!timer) return;
+    const remaining = nextWaveTimestamp - Date.now();
+    timer.textContent = formatWaveTimer(remaining);
+  }
+
+  function startEnemyWaves() {
+    spawnEnemyWave();
+    setInterval(spawnEnemyWave, WAVE_INTERVAL_MS);
+  }
+
+  function updateMovingUnits() {
+    const duration = 80;
+    movingUnits.forEach(unit => {
+      if(unit.arrived) return;
+      unit.progress += 1 / duration;
+      if(unit.progress >= 1) {
+        unit.progress = 1;
+        unit.arrived = true;
+        addLog(`El ${unit.type} llegó a su destino explorado.`);
+      }
+    });
+  }
+
+  function drawMovingUnits() {
+    movingUnits.forEach(unit => {
+      const sx = unit.start.x * TILE + TILE / 2;
+      const sy = unit.start.y * TILE + TILE / 2;
+      const ex = unit.target.x * TILE + TILE / 2;
+      const ey = unit.target.y * TILE + TILE / 2;
+      const px = sx + (ex - sx) * Math.min(unit.progress, 1);
+      const py = sy + (ey - sy) * Math.min(unit.progress, 1);
+      if(assetImages[unit.type]?.complete) {
+        ctx.drawImage(assetImages[unit.type], px - TILE/6, py - TILE/6, TILE/3, TILE/3);
+      }
+    });
+  }
+
+  function chooseStructure(type) {
+    currentStructureChoice = type;
+    const button = document.getElementById('choose-structure');
+    if(button) {
+      button.textContent = type === 'barracks' ? 'Barraca seleccionada' : 'Estructura seleccionada';
+    }
+    addLog('Seleccionaste la barraca como estructura para construir.');
+  }
+
+  function buildSelectedStructure() {
+    if(!currentStructureChoice) {
+      addLog('Primero elige una estructura para construir.');
+      return;
+    }
+    if(!selectedTile) {
+      addLog('Selecciona un terreno vacío junto al castillo para construir.');
+      return;
+    }
+    if(currentStructureChoice === 'barracks') {
+      if(!canBuildBarracks(selectedTile)) {
+        addLog('Debes elegir un terreno vacío junto al castillo para construir barracas.');
+        return;
+      }
+      buildBarracks(selectedTile);
+      return;
+    }
+    addLog('Esa estructura no está disponible.');
+  }
+
   function getRandomUndiscoveredNeighbor() {
     const candidates = [];
     for(let y=0;y<ROWS;y++){
@@ -625,6 +791,9 @@
   document.getElementById('reset-map').addEventListener('click', ()=>{
     Object.keys(inventory).forEach(key => inventory[key] = 0);
     totalCollected = 0;
+    currentStructureChoice = null;
+    const chooseButton = document.getElementById('choose-structure');
+    if(chooseButton) chooseButton.textContent = 'Elegir barraca';
     updateCounters();
     buildMap();
     updateInventoryPanel();
@@ -632,6 +801,8 @@
     drawGrid();
     addLog('El mapa se reinició. Tu castillo está de nuevo en el centro.');
   });
+  document.getElementById('choose-structure').addEventListener('click', ()=>chooseStructure('barracks'));
+  document.getElementById('build-structure').addEventListener('click', buildSelectedStructure);
 
   window.mapActions = {
     gather() {
@@ -657,12 +828,18 @@
   function drawLoop() {
     if(readyCount >= Object.keys(ASSETS).length) {
       updateWorkers();
+      updateMovingUnits();
+      updateEnemyUnits();
       drawGrid();
+      drawMovingUnits();
+      drawEnemyUnits();
+      updateWaveTimerDisplay();
     }
     requestAnimationFrame(drawLoop);
   }
 
   buildMap();
+  startEnemyWaves();
   updateInventoryPanel();
   renderSelectedInfo();
   updateCounters();
