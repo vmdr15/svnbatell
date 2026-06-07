@@ -686,49 +686,57 @@
     for(let i = 0; i < waveCount; i++) {
       const spawn = getEnemySpawnTile();
       const type = i % 2 === 0 ? 'slime' : 'lagart';
+      const path = computePath({ x: spawn.x, y: spawn.y }, { x: castleCoords.x, y: castleCoords.y });
+      const msPerBlock = 1000 / 1; // 1 block per second
       enemyUnits.push({
         type,
-        start: { x: spawn.x, y: spawn.y },
-        target: { x: castleCoords.x, y: castleCoords.y },
-        progress: 0,
-        arrived: false
+        pos: { x: spawn.x, y: spawn.y },
+        path,
+        index: 0,
+        stepProgress: 0,
+        stepMs: msPerBlock,
+        arrived: path.length === 0
       });
     }
     nextWaveTimestamp = Date.now() + WAVE_INTERVAL_MS;
     addLog(`Oleada enemiga: ${waveCount} unidades (${waveCount % 2 === 0 ? 'slimes y lagarts' : 'slimes y lagart'}).`);
   }
 
-  function updateEnemyUnits() {
-    const duration = 360;
+  function updateEnemyUnits(dt) {
     for(let i = enemyUnits.length - 1; i >= 0; i--) {
       const enemy = enemyUnits[i];
       if(enemy.arrived) continue;
-      enemy.progress += 1 / duration;
-      if(enemy.progress >= 1) {
-        enemy.progress = 1;
+      if(enemy.index >= enemy.path.length) {
         enemy.arrived = true;
-        // Enemy reached the castle: reduce castle HP by 1
+        // reduce castle HP by 1
         const castleTile = map[castleCoords.y] && map[castleCoords.y][castleCoords.x];
         if(castleTile && castleTile.structure === 'castle') {
           castleTile.structureHealth = Math.max(0, (castleTile.structureHealth || 0) - 1);
           addLog(`El ${enemy.type} alcanzó el castillo y le quitó 1 de vida. Salud del castillo: ${castleTile.structureHealth}/${structureHealth.castle}`);
-          if(castleTile.structureHealth <= 0) {
-            addLog('El castillo ha sido destruido. Fin del juego.');
-          }
+          if(castleTile.structureHealth <= 0) addLog('El castillo ha sido destruido. Fin del juego.');
         }
         enemyUnits.splice(i, 1);
+        continue;
+      }
+      enemy.stepProgress += dt;
+      const prev = { x: enemy.pos.x, y: enemy.pos.y };
+      const next = enemy.path[enemy.index];
+      const t = Math.min(1, enemy.stepProgress / enemy.stepMs);
+      enemy.pos.x = prev.x + (next.x - prev.x) * t;
+      enemy.pos.y = prev.y + (next.y - prev.y) * t;
+      if(enemy.stepProgress >= enemy.stepMs) {
+        enemy.pos.x = next.x;
+        enemy.pos.y = next.y;
+        enemy.index += 1;
+        enemy.stepProgress -= enemy.stepMs;
       }
     }
   }
 
   function drawEnemyUnits() {
     enemyUnits.forEach(enemy => {
-      const sx = enemy.start.x * TILE + TILE / 2;
-      const sy = enemy.start.y * TILE + TILE / 2;
-      const ex = enemy.target.x * TILE + TILE / 2;
-      const ey = enemy.target.y * TILE + TILE / 2;
-      const px = sx + (ex - sx) * Math.min(enemy.progress, 1);
-      const py = sy + (ey - sy) * Math.min(enemy.progress, 1);
+      const px = enemy.pos.x * TILE + TILE / 2;
+      const py = enemy.pos.y * TILE + TILE / 2;
       if(assetImages[enemy.type]?.complete) {
         ctx.drawImage(assetImages[enemy.type], px - TILE/6, py - TILE/6, TILE/3, TILE/3);
       }
@@ -916,9 +924,12 @@
 
   function drawLoop() {
     if(readyCount >= Object.keys(ASSETS).length) {
+      const now = Date.now();
+      const dt = now - lastFrameTime;
+      lastFrameTime = now;
       updateWorkers();
-      updateMovingUnits();
-      updateEnemyUnits();
+      updateMovingUnits(dt);
+      updateEnemyUnits(dt);
       drawGrid();
       drawMovingUnits();
       drawEnemyUnits();
