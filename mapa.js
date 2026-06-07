@@ -35,6 +35,13 @@
     assetImages[key] = img;
   });
 
+  const COSTS = {
+    minero: { madera: 8 },
+    caballero: { hierro: 4, piedra: 8 },
+    arquero: { madera: 8, mineral: 6, cobre: 4 },
+    barracks: { mineral: 5, madera: 10, cobre: 4, hierro: 4, oro: 4 }
+  };
+
   const inventory = {
     madera: 0,
     piedra: 0,
@@ -60,6 +67,7 @@
   let nextWaveTimestamp = Date.now() + WAVE_INTERVAL_MS;
   let currentStructureChoice = null;
   let castleCoords = { x: Math.floor(COLS / 2), y: Math.floor(ROWS / 2) };
+  let lastFrameTime = Date.now();
 
   function createTile(type) {
     return {
@@ -433,19 +441,18 @@
 
   function buildUnit(unitType) {
     if(!selectedTile || selectedTile.structure !== 'barracks') return;
-    const cost = unitType === 'caballero'
-      ? { piedra: 6, mineral: 8, hierro: 5 }
-      : { madera: 8, mineral: 6, cobre: 4 };
-    const canPay = Object.entries(cost).every(([key, amount]) => inventory[key] >= amount);
+    const cost = unitType === 'caballero' ? COSTS.caballero : COSTS.arquero;
+    const canPay = Object.entries(cost).every(([key, amount]) => (inventory[key] || 0) >= amount);
     if(!canPay) {
-      addLog('No tienes suficientes recursos para crear la unidad.');
+      addLog('No tienes suficientes recursos para crear la unidad. Revisa los costos.');
+      addLog(`Costos para ${unitType}: ${Object.entries(cost).map(([k,v])=>v+" "+k).join(', ')}`);
       return;
     }
-    Object.entries(cost).forEach(([key, amount]) => inventory[key] -= amount);
+    Object.entries(cost).forEach(([key, amount]) => inventory[key] = (inventory[key] || 0) - amount);
     selectedTile.units[unitType] += 1;
     inventory[unitType + 's'] += 1;
     spawnUnit(unitType, selectedTile);
-    addLog(`Se creó un ${unitType} en la barraca y parte hacia una zona explorada.`);
+    addLog(`Se creó un ${unitType} en la barraca. Costos: ${Object.entries(cost).map(([k,v])=>v+" "+k).join(', ')}.`);
     updateCounters();
     updateInventoryPanel();
     renderSelectedInfo();
@@ -494,26 +501,29 @@
       description = 'Bosque: da madera y se consume cuando recolectas.';
       buttons = `<button class="button" onclick="window.mapActions.gather()">Recolectar madera</button>`;
     } else if(selectedTile.type === 'rock') {
-      description = inventory.mineros > 0
-        ? 'Roca: da piedra y se consume al recolectarla.'
-        : 'Necesitas mineros para poder extraer piedra.';
-      buttons = `<button class="button" onclick="window.mapActions.gather()" ${gatherNeedsMiners ? 'disabled' : ''}>Minar piedra</button>`;
+      const rockNote = inventory.mineros > 0 ? 'Roca: da piedra y se consume al recolectarla.' : 'Necesitas mineros para poder extraer piedra.';
+      const rockCost = 'Requiere 1 minero';
+      description = rockNote;
+      buttons = `<button class="button" onclick="window.mapActions.gather()" ${gatherNeedsMiners ? 'disabled' : ''}>Minar piedra (${rockCost})</button>`;
     } else if(selectedTile.type === 'cave') {
-      description = inventory.mineros > 0
-        ? 'Cueva: da piedra infinita, mineral y a veces oro, hierro o cobre.'
-        : 'Necesitas mineros para poder extraer de la cueva.';
-      buttons = `<button class="button" onclick="window.mapActions.gather()" ${gatherNeedsMiners ? 'disabled' : ''}>Extraer de la cueva</button>`;
+      const caveNote = inventory.mineros > 0 ? 'Cueva: da piedra infinita, mineral y a veces oro, hierro o cobre.' : 'Necesitas mineros para poder extraer de la cueva.';
+      const caveCost = 'Requiere 1 minero';
+      description = caveNote;
+      buttons = `<button class="button" onclick="window.mapActions.gather()" ${gatherNeedsMiners ? 'disabled' : ''}>Extraer de la cueva (${caveCost})</button>`;
     } else if(selectedTile.structure === 'barracks') {
       description = 'Barracas: crea caballero y arquero. Usa recursos para construir unidades.';
+      const cabCost = Object.entries(COSTS.caballero).map(([k,v])=>v+" "+k).join(', ');
+      const arcCost = Object.entries(COSTS.arquero).map(([k,v])=>v+" "+k).join(', ');
       buttons = `
-        <button class="button" onclick="window.mapActions.build('caballero')">Crear caballero</button>
-        <button class="button" onclick="window.mapActions.build('arquero')">Crear arquero</button>
+        <button class="button" onclick="window.mapActions.build('caballero')">Crear caballero (${cabCost})</button>
+        <button class="button" onclick="window.mapActions.build('arquero')">Crear arquero (${arcCost})</button>
         <button class="button secondary" onclick="window.mapActions.repair()">Reparar estructura</button>
       `;
     } else if(selectedTile.structure === 'castle') {
       description = 'Castillo: tu base central. Repara usando mineral, oro, hierro y cobre. Aquí puedes crear mineros.';
+      const minerCost = Object.entries(COSTS.minero).map(([k,v])=>v+" "+k).join(', ');
       buttons = `
-        <button class="button" onclick="window.mapActions.buildMiner()">Crear minero</button>
+        <button class="button" onclick="window.mapActions.buildMiner()">Crear minero (${minerCost})</button>
         <button class="button secondary" onclick="window.mapActions.repair()">Reparar castillo</button>
       `;
     } else if(selectedTile.type === 'empty' && canBuildBarracks(selectedTile)) {
@@ -521,7 +531,8 @@
       description = building
         ? 'El constructor ya está en camino para construir aquí.'
         : 'Terreno vacío junto al castillo. Construye barracas para entrenar unidades.';
-      buttons = `<button class="button" onclick="window.mapActions.buildBarracks()" ${building ? 'disabled' : ''}>${building ? 'Construyendo...' : 'Construir barracas'}</button>`;
+      const barrCost = Object.entries(COSTS.barracks).map(([k,v])=>v+" "+k).join(', ');
+      buttons = `<button class="button" onclick="window.mapActions.buildBarracks()" ${building ? 'disabled' : ''}>${building ? 'Construyendo...' : 'Construir barracas ('+barrCost+')'}</button>`;
     } else {
       description = 'Terreno despejado. Explora más para encontrar recursos.';
     }
@@ -571,17 +582,18 @@
   }
 
   function buildBarracks(tile) {
-    const cost = { madera: 100, piedra: 50 };
-    const canPay = Object.entries(cost).every(([key, amount]) => inventory[key] >= amount);
+    const cost = COSTS.barracks;
+    const canPay = Object.entries(cost).every(([key, amount]) => (inventory[key] || 0) >= amount);
     if(!canPay) {
-      addLog('No tienes suficientes recursos para construir barracas.');
+      addLog('No tienes suficientes recursos para construir barracas. Revisa los costos.');
+      addLog(`Costos para barracas: ${Object.entries(cost).map(([k,v])=>v+" "+k).join(', ')}`);
       return;
     }
     if(tile.building) {
       addLog('Ya hay un constructor en camino a ese lugar. Espera a que termine.');
       return;
     }
-    Object.entries(cost).forEach(([key, amount]) => inventory[key] -= amount);
+    Object.entries(cost).forEach(([key, amount]) => inventory[key] = (inventory[key] || 0) - amount);
     tile.building = true;
     activeWorkers.push({
       type: 'constructor',
@@ -599,15 +611,16 @@
 
   function buildMiner() {
     if(!selectedTile || selectedTile.structure !== 'castle') return;
-    const cost = { madera: 100, piedra: 50 };
-    const canPay = Object.entries(cost).every(([key, amount]) => inventory[key] >= amount);
+    const cost = COSTS.minero;
+    const canPay = Object.entries(cost).every(([key, amount]) => (inventory[key] || 0) >= amount);
     if(!canPay) {
-      addLog('No tienes suficientes recursos para crear un minero.');
+      addLog('No tienes suficientes recursos para crear un minero. Revisa los costos.');
+      addLog(`Costos para minero: ${Object.entries(cost).map(([k,v])=>v+" "+k).join(', ')}`);
       return;
     }
-    Object.entries(cost).forEach(([key, amount]) => inventory[key] -= amount);
+    Object.entries(cost).forEach(([key, amount]) => inventory[key] = (inventory[key] || 0) - amount);
     inventory.mineros += 1;
-    addLog('Creaste un minero en el castillo.');
+    addLog(`Creaste un minero en el castillo. Costos: ${Object.entries(cost).map(([k,v])=>v+" "+k).join(', ')}.`);
     updateInventoryPanel();
     renderSelectedInfo();
   }
@@ -625,14 +638,33 @@
     return candidates.length ? candidates[Math.floor(Math.random() * candidates.length)] : startTile;
   }
 
+  function computePath(start, target) {
+    const path = [];
+    let cx = start.x;
+    let cy = start.y;
+    while(cx !== target.x) {
+      cx += cx < target.x ? 1 : -1;
+      path.push({ x: cx, y: cy });
+    }
+    while(cy !== target.y) {
+      cy += cy < target.y ? 1 : -1;
+      path.push({ x: cx, y: cy });
+    }
+    return path;
+  }
+
   function spawnUnit(unitType, startTile) {
     const targetTile = getUnitTarget(startTile);
+    const path = computePath({ x: startTile.x, y: startTile.y }, { x: targetTile.x, y: targetTile.y });
+    const msPerBlock = 1000 / 2; // 2 blocks per second
     movingUnits.push({
       type: unitType,
-      start: { x: startTile.x, y: startTile.y },
-      target: { x: targetTile.x, y: targetTile.y },
-      progress: 0,
-      arrived: false
+      pos: { x: startTile.x, y: startTile.y },
+      path,
+      index: 0,
+      stepProgress: 0,
+      stepMs: msPerBlock,
+      arrived: path.length === 0
     });
   }
 
@@ -667,7 +699,7 @@
   }
 
   function updateEnemyUnits() {
-    const duration = 240;
+    const duration = 360;
     for(let i = enemyUnits.length - 1; i >= 0; i--) {
       const enemy = enemyUnits[i];
       if(enemy.arrived) continue;
@@ -675,7 +707,15 @@
       if(enemy.progress >= 1) {
         enemy.progress = 1;
         enemy.arrived = true;
-        addLog(`El ${enemy.type} llegó al castillo en oleada y atacó.`);
+        // Enemy reached the castle: reduce castle HP by 1
+        const castleTile = map[castleCoords.y] && map[castleCoords.y][castleCoords.x];
+        if(castleTile && castleTile.structure === 'castle') {
+          castleTile.structureHealth = Math.max(0, (castleTile.structureHealth || 0) - 1);
+          addLog(`El ${enemy.type} alcanzó el castillo y le quitó 1 de vida. Salud del castillo: ${castleTile.structureHealth}/${structureHealth.castle}`);
+          if(castleTile.structureHealth <= 0) {
+            addLog('El castillo ha sido destruido. Fin del juego.');
+          }
+        }
         enemyUnits.splice(i, 1);
       }
     }
@@ -714,34 +754,41 @@
       clearInterval(enemyWaveInterval);
       enemyWaveInterval = null;
     }
+    nextWaveTimestamp = Date.now() + WAVE_INTERVAL_MS;
     if(spawnImmediate) {
       spawnEnemyWave();
     }
-    nextWaveTimestamp = Date.now() + WAVE_INTERVAL_MS;
     enemyWaveInterval = setInterval(spawnEnemyWave, WAVE_INTERVAL_MS);
   }
 
-  function updateMovingUnits() {
-    const duration = 80;
+  function updateMovingUnits(dt) {
     movingUnits.forEach(unit => {
       if(unit.arrived) return;
-      unit.progress += 1 / duration;
-      if(unit.progress >= 1) {
-        unit.progress = 1;
+      if(unit.index >= unit.path.length) {
         unit.arrived = true;
         addLog(`El ${unit.type} llegó a su destino explorado.`);
+        return;
+      }
+      unit.stepProgress += dt;
+      const prev = { x: unit.pos.x, y: unit.pos.y };
+      const next = unit.path[unit.index];
+      const t = Math.min(1, unit.stepProgress / unit.stepMs);
+      unit.pos.x = prev.x + (next.x - prev.x) * t;
+      unit.pos.y = prev.y + (next.y - prev.y) * t;
+      if(unit.stepProgress >= unit.stepMs) {
+        // advance to next tile
+        unit.pos.x = next.x;
+        unit.pos.y = next.y;
+        unit.index += 1;
+        unit.stepProgress -= unit.stepMs;
       }
     });
   }
 
   function drawMovingUnits() {
     movingUnits.forEach(unit => {
-      const sx = unit.start.x * TILE + TILE / 2;
-      const sy = unit.start.y * TILE + TILE / 2;
-      const ex = unit.target.x * TILE + TILE / 2;
-      const ey = unit.target.y * TILE + TILE / 2;
-      const px = sx + (ex - sx) * Math.min(unit.progress, 1);
-      const py = sy + (ey - sy) * Math.min(unit.progress, 1);
+      const px = unit.pos.x * TILE + TILE / 2;
+      const py = unit.pos.y * TILE + TILE / 2;
       if(assetImages[unit.type]?.complete) {
         ctx.drawImage(assetImages[unit.type], px - TILE/6, py - TILE/6, TILE/3, TILE/3);
       }
@@ -881,7 +928,8 @@
   }
 
   buildMap();
-  startEnemyWaves();
+  // Start enemy wave timer but do not spawn immediately at game start
+  startEnemyWaves(false);
   updateInventoryPanel();
   renderSelectedInfo();
   updateCounters();
