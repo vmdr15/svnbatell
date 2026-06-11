@@ -28,7 +28,7 @@
     }
 
     .container {
-      width: min(100%, 1080px);
+      width: min(100%, 1240px);
       display: grid;
       gap: 24px;
     }
@@ -62,7 +62,7 @@
 
     .layout {
       display: grid;
-      grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr);
+      grid-template-columns: minmax(0, 1.9fr) minmax(320px, 0.95fr);
       gap: 24px;
     }
 
@@ -82,7 +82,7 @@
 
     canvas {
       width: 100%;
-      max-width: 880px;
+      max-width: 100%;
       border-radius: 16px;
       background: #06101a;
       border: 1px solid rgba(255, 255, 255, 0.06);
@@ -224,7 +224,7 @@
     <section class="card layout">
       <div class="panel">
         <h2>Mapa de batalla</h2>
-        <canvas id="explore-map" width="800" height="420"></canvas>
+        <canvas id="explore-map" width="960" height="560"></canvas>
         <div class="toolbar">
           <button class="button" id="reveal-random">Explorar zona</button>
           <button class="button secondary" id="reset-map">Reiniciar mapa</button>
