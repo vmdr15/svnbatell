@@ -10,7 +10,7 @@
     forest: 'elementos/arbola.gif',
     rock: 'elementos/roca.gif',
     cave: 'elementos/cueva.gif',
-    barracks: 'elementos/barraca.gif',
+    barracks: 'elementos/barraca (1).gif',
     castle: 'elementos/castillo (1).gif',
     caballero: 'elementos/caballero.gif',
     arquero: 'elementos/arquero.gif',
@@ -34,7 +34,9 @@
     img.onload = () => { readyCount++; };
     assetImages[key] = img;
   });
-
+  
+  // Movement speed: blocks per second for all units/workers
+  const MS_PER_BLOCK = 1000 / 1.5; // 1.5 blocks per second
   const COSTS = {
     minero: { madera: 8 },
     caballero: { hierro: 4, piedra: 8 },
@@ -265,7 +267,9 @@
       type: workerType,
       from: { ...castleCoords },
       to: { x: tile.x, y: tile.y },
-      progress: 0,
+      // timing using ms-based progress so speed is consistent
+      stepProgress: 0,
+      stepMs: MS_PER_BLOCK,
       phase: 'going',
       resources
     });
@@ -283,20 +287,31 @@
     }, 300000);
   }
 
-  function updateWorkers() {
-    const duration = 80;
+  function updateWorkers(dt) {
     for(let i = activeWorkers.length - 1; i >= 0; i--) {
       const worker = activeWorkers[i];
-      worker.progress += 1 / duration;
-      if(worker.progress >= 1) {
+      worker.stepProgress += dt;
+      const t = Math.min(1, worker.stepProgress / worker.stepMs);
+      if(worker.stepProgress >= worker.stepMs) {
+        // arrival at current leg
+        worker.stepProgress -= worker.stepMs;
         if(worker.phase === 'going') {
           if(worker.type === 'constructor' && worker.targetTile) {
             worker.phase = 'building';
-            worker.progress = 0;
             addLog('El constructor llegó al sitio y comienza la construcción.');
           } else {
+            // mark resource as collected when worker actually reaches it
+            const tile = map[worker.to.y] && map[worker.to.y][worker.to.x];
+            if(tile) {
+              const origType = tile.type;
+              tile.collected = true;
+              // only convert known resource types to empty
+              if(origType === 'forest' || origType === 'rock' || origType === 'cave') {
+                tile.type = 'empty';
+                if(origType === 'forest') scheduleTreeRegrow(tile);
+              }
+            }
             worker.phase = 'returning';
-            worker.progress = 0;
             addLog(`El ${worker.type} llegó al recurso y comienza a regresar al castillo.`);
           }
         } else if(worker.phase === 'building') {
@@ -310,7 +325,6 @@
             addLog('La barraca fue construida en el lugar seleccionado.');
           }
           worker.phase = 'returning';
-          worker.progress = 0;
         } else {
           if(worker.resources) {
             const gained = [];
@@ -342,8 +356,9 @@
       const sy = start.y * TILE + TILE / 2;
       const ex = end.x * TILE + TILE / 2;
       const ey = end.y * TILE + TILE / 2;
-      const px = sx + (ex - sx) * worker.progress;
-      const py = sy + (ey - sy) * worker.progress;
+      const t = Math.min(1, (worker.stepProgress || 0) / (worker.stepMs || MS_PER_BLOCK));
+      const px = sx + (ex - sx) * t;
+      const py = sy + (ey - sy) * t;
       if(assetImages[worker.type]?.complete) {
         ctx.drawImage(assetImages[worker.type], px - TILE/6, py - TILE/6, TILE/3, TILE/3);
       }
@@ -404,19 +419,16 @@
     if(!tile.discovered) return;
     if(tile.type === 'forest' && !tile.collected) {
       createWorkerTask(tile, { madera: 8 });
-      tile.collected = true;
-      tile.type = 'empty';
-      scheduleTreeRegrow(tile);
-      addLog('Un leñador parte hacia el árbol. Los recursos se sumarán cuando regrese al castillo.');
+      tile.collected = true; // reservar recurso mientras el trabajador va hacia él
+      addLog('Un leñador parte hacia el árbol. El árbol permanecerá hasta que llegue el leñador.');
     } else if(tile.type === 'rock' && !tile.collected) {
       if(inventory.mineros <= 0) {
         addLog('Necesitas mineros para minar piedra. Crea mineros en el castillo.');
         return;
       }
       createWorkerTask(tile, { piedra: 10 });
-      tile.collected = true;
-      tile.type = 'empty';
-      addLog('Un minero parte hacia la roca. Los recursos se sumarán cuando regrese al castillo.');
+      tile.collected = true; // reservar recurso mientras el trabajador va hacia él
+      addLog('Un minero parte hacia la roca. La roca permanecerá hasta que llegue el minero.');
     } else if(tile.type === 'cave') {
       if(inventory.mineros <= 0) {
         addLog('Necesitas mineros para extraer de la cueva. Crea mineros en el castillo.');
@@ -599,7 +611,8 @@
       type: 'constructor',
       from: { ...castleCoords },
       to: { x: tile.x, y: tile.y },
-      progress: 0,
+      stepProgress: 0,
+      stepMs: MS_PER_BLOCK,
       phase: 'going',
       targetTile: tile
     });
@@ -656,7 +669,7 @@
   function spawnUnit(unitType, startTile) {
     const targetTile = getUnitTarget(startTile);
     const path = computePath({ x: startTile.x, y: startTile.y }, { x: targetTile.x, y: targetTile.y });
-    const msPerBlock = 1000 / 2; // 2 blocks per second
+    const msPerBlock = MS_PER_BLOCK; // unified speed: 1.5 blocks per second
     movingUnits.push({
       type: unitType,
       pos: { x: startTile.x, y: startTile.y },
@@ -687,7 +700,7 @@
       const spawn = getEnemySpawnTile();
       const type = i % 2 === 0 ? 'slime' : 'lagart';
       const path = computePath({ x: spawn.x, y: spawn.y }, { x: castleCoords.x, y: castleCoords.y });
-      const msPerBlock = 1000 / 1; // 1 block per second
+      const msPerBlock = MS_PER_BLOCK; // unified speed: 1.5 blocks per second
       enemyUnits.push({
         type,
         pos: { x: spawn.x, y: spawn.y },
@@ -927,7 +940,7 @@
       const now = Date.now();
       const dt = now - lastFrameTime;
       lastFrameTime = now;
-      updateWorkers();
+      updateWorkers(dt);
       updateMovingUnits(dt);
       updateEnemyUnits(dt);
       drawGrid();
