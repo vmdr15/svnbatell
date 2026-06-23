@@ -35,8 +35,8 @@
     assetImages[key] = img;
   });
   
-  // Movement speed: blocks per second for all units/workers
-  const MS_PER_BLOCK = 1000 / 1.5; // 1.5 blocks per second
+  // Movement speed: milliseconds per block for all units/workers (1 block per second)
+  const MS_PER_BLOCK = 1000; // 1 block per second
   const COSTS = {
     minero: { madera: 8 },
     caballero: { hierro: 4, piedra: 8 },
@@ -350,15 +350,10 @@
 
   function drawWorkers() {
     activeWorkers.forEach(worker => {
-      const start = worker.phase === 'going' ? worker.from : worker.to;
-      const end = worker.phase === 'going' ? worker.to : worker.from;
-      const sx = start.x * TILE + TILE / 2;
-      const sy = start.y * TILE + TILE / 2;
-      const ex = end.x * TILE + TILE / 2;
-      const ey = end.y * TILE + TILE / 2;
-      const t = Math.min(1, (worker.stepProgress || 0) / (worker.stepMs || MS_PER_BLOCK));
-      const px = sx + (ex - sx) * t;
-      const py = sy + (ey - sy) * t;
+      // block-by-block: show worker at origin while going, at target while building/returning
+      const posTile = (worker.phase === 'going') ? worker.from : worker.to;
+      const px = posTile.x * TILE + TILE / 2;
+      const py = posTile.y * TILE + TILE / 2;
       if(assetImages[worker.type]?.complete) {
         ctx.drawImage(assetImages[worker.type], px - TILE/6, py - TILE/6, TILE/3, TILE/3);
       }
@@ -732,11 +727,8 @@
         continue;
       }
       enemy.stepProgress += dt;
-      const prev = { x: enemy.pos.x, y: enemy.pos.y };
       const next = enemy.path[enemy.index];
-      const t = Math.min(1, enemy.stepProgress / enemy.stepMs);
-      enemy.pos.x = prev.x + (next.x - prev.x) * t;
-      enemy.pos.y = prev.y + (next.y - prev.y) * t;
+      // discrete block-by-block movement: update position only when step completes
       if(enemy.stepProgress >= enemy.stepMs) {
         enemy.pos.x = next.x;
         enemy.pos.y = next.y;
@@ -791,13 +783,9 @@
         return;
       }
       unit.stepProgress += dt;
-      const prev = { x: unit.pos.x, y: unit.pos.y };
       const next = unit.path[unit.index];
-      const t = Math.min(1, unit.stepProgress / unit.stepMs);
-      unit.pos.x = prev.x + (next.x - prev.x) * t;
-      unit.pos.y = prev.y + (next.y - prev.y) * t;
+      // discrete block-by-block movement: update position only when step completes
       if(unit.stepProgress >= unit.stepMs) {
-        // advance to next tile
         unit.pos.x = next.x;
         unit.pos.y = next.y;
         unit.index += 1;
