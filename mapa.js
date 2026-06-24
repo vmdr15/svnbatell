@@ -70,12 +70,15 @@
   let currentStructureChoice = null;
   let castleCoords = { x: Math.floor(COLS / 2), y: Math.floor(ROWS / 2) };
   let lastFrameTime = Date.now();
+  let gameOver = false;
 
   function createTile(type) {
     return {
       type,
       discovered: false,
       collected: false,
+      reserved: false,
+      usesRemaining: null,
       structure: null,
       structureHealth: null,
       units: { caballero: 0, arquero: 0 },
@@ -107,6 +110,7 @@
 
     createEmptyRing(center.x, center.y);
     fillResources();
+    map.forEach(row => row.forEach(tile => tile.discovered = true));
     selectedTile = castleTile;
     castleCoords = { x: center.x, y: center.y };
     activeWorkers.length = 0;
@@ -187,6 +191,8 @@
       const chosen = empties[Math.floor(Math.random() * empties.length)];
       chosen.type = 'cave';
       chosen.collected = false;
+      chosen.usesRemaining = 2;
+      chosen.reserved = false;
     }
   }
 
@@ -304,11 +310,17 @@
             const tile = map[worker.to.y] && map[worker.to.y][worker.to.x];
             if(tile) {
               const origType = tile.type;
-              tile.collected = true;
-              // only convert known resource types to empty
-              if(origType === 'forest' || origType === 'rock' || origType === 'cave') {
+              if(origType === 'forest' || origType === 'rock') {
+                tile.collected = true;
                 tile.type = 'empty';
                 if(origType === 'forest') scheduleTreeRegrow(tile);
+              } else if(origType === 'cave') {
+                tile.usesRemaining = (typeof tile.usesRemaining === 'number' ? tile.usesRemaining : 2) - 1;
+                tile.reserved = false;
+                if(tile.usesRemaining <= 0) {
+                  tile.type = 'empty';
+                  tile.collected = true;
+                }
               }
             }
             worker.phase = 'returning';
@@ -326,6 +338,9 @@
           }
           worker.phase = 'returning';
         } else {
+          if(worker.type === 'minero') {
+            inventory.mineros += 1;
+          }
           if(worker.resources) {
             const gained = [];
             Object.entries(worker.resources).forEach(([key, value]) => {
@@ -400,6 +415,24 @@
     log.textContent = `${time} — ${message}\n${log.textContent}`;
   }
 
+  function showGameOver() {
+    gameOver = true;
+    if(enemyWaveInterval) {
+      clearInterval(enemyWaveInterval);
+      enemyWaveInterval = null;
+    }
+    const overlay = document.getElementById('game-over-overlay');
+    if(!overlay) return;
+    overlay.classList.remove('hidden');
+  }
+
+  function hideGameOver() {
+    gameOver = false;
+    const overlay = document.getElementById('game-over-overlay');
+    if(!overlay) return;
+    overlay.classList.add('hidden');
+  }
+
   function selectTile(x,y) {
     selectedTile = map[y][x];
     renderSelectedInfo();
@@ -421,14 +454,20 @@
         addLog('Necesitas mineros para minar piedra. Crea mineros en el castillo.');
         return;
       }
+      inventory.mineros -= 1;
       createWorkerTask(tile, { piedra: 10 });
       tile.collected = true; // reservar recurso mientras el trabajador va hacia él
       addLog('Un minero parte hacia la roca. La roca permanecerá hasta que llegue el minero.');
     } else if(tile.type === 'cave') {
+      if(tile.reserved) {
+        addLog('Ya hay un minero extrayendo en esa cueva. Espera a que regrese.');
+        return;
+      }
       if(inventory.mineros <= 0) {
         addLog('Necesitas mineros para extraer de la cueva. Crea mineros en el castillo.');
         return;
       }
+      inventory.mineros -= 1;
       const resources = {
         piedra: 4,
         mineral: 3,
@@ -437,7 +476,8 @@
         cobre: Math.random() < 0.20 ? 1 : 0
       };
       createWorkerTask(tile, resources);
-      addLog('Un minero parte hacia la cueva. Los recursos se sumarán cuando regrese al castillo.');
+      tile.reserved = true;
+      addLog('Un minero parte hacia la cueva. La cueva desaparecerá después de dos extracciones.');
     } else {
       addLog('No hay nada que recolectar aquí.');
     }
@@ -513,10 +553,17 @@
       description = rockNote;
       buttons = `<button class="button" onclick="window.mapActions.gather()" ${gatherNeedsMiners ? 'disabled' : ''}>Minar piedra (${rockCost})</button>`;
     } else if(selectedTile.type === 'cave') {
-      const caveNote = inventory.mineros > 0 ? 'Cueva: da piedra infinita, mineral y a veces oro, hierro o cobre.' : 'Necesitas mineros para poder extraer de la cueva.';
+      const uses = typeof selectedTile.usesRemaining === 'number' ? selectedTile.usesRemaining : 2;
+      const caveNote = inventory.mineros > 0
+        ? `Cueva: da piedra, mineral y a veces oro, hierro o cobre. Usos restantes: ${uses}.`
+        : 'Necesitas mineros para poder extraer de la cueva.';
       const caveCost = 'Requiere 1 minero';
       description = caveNote;
-      buttons = `<button class="button" onclick="window.mapActions.gather()" ${gatherNeedsMiners ? 'disabled' : ''}>Extraer de la cueva (${caveCost})</button>`;
+      const caveDisabled = gatherNeedsMiners || selectedTile.reserved || uses <= 0;
+      buttons = `<button class="button" onclick="window.mapActions.gather()" ${caveDisabled ? 'disabled' : ''}>Extraer de la cueva (${caveCost})</button>`;
+      if(selectedTile.reserved) {
+        description += ' Un minero ya está extrayendo aquí.';
+      }
     } else if(selectedTile.structure === 'barracks') {
       description = 'Barracas: crea caballero y arquero. Usa recursos para construir unidades.';
       const cabCost = Object.entries(COSTS.caballero).map(([k,v])=>v+" "+k).join(', ');
@@ -721,7 +768,10 @@
         if(castleTile && castleTile.structure === 'castle') {
           castleTile.structureHealth = Math.max(0, (castleTile.structureHealth || 0) - 1);
           addLog(`El ${enemy.type} alcanzó el castillo y le quitó 1 de vida. Salud del castillo: ${castleTile.structureHealth}/${structureHealth.castle}`);
-          if(castleTile.structureHealth <= 0) addLog('El castillo ha sido destruido. Fin del juego.');
+          if(castleTile.structureHealth <= 0) {
+            addLog('El castillo ha sido destruido. Fin del juego.');
+            showGameOver();
+          }
         }
         enemyUnits.splice(i, 1);
         continue;
@@ -878,29 +928,11 @@
   });
 
   document.getElementById('reveal-random').addEventListener('click', autoExplore);
-  document.getElementById('reset-map').addEventListener('click', ()=>{
-    Object.keys(inventory).forEach(key => inventory[key] = 0);
-    totalCollected = 0;
-    currentStructureChoice = null;
-    enemyUnits.length = 0;
-    movingUnits.length = 0;
-    if(enemyWaveInterval) {
-      clearInterval(enemyWaveInterval);
-      enemyWaveInterval = null;
-    }
-    nextWaveTimestamp = Date.now() + WAVE_INTERVAL_MS;
-    const chooseButton = document.getElementById('choose-structure');
-    if(chooseButton) chooseButton.textContent = 'Elegir barraca';
-    updateCounters();
-    buildMap();
-    updateInventoryPanel();
-    renderSelectedInfo();
-    drawGrid();
-    startEnemyWaves(false);
-    addLog('El mapa se reinició. Tu castillo está de nuevo en el centro.');
-  });
+  document.getElementById('reset-map').addEventListener('click', resetMap);
   document.getElementById('choose-structure').addEventListener('click', ()=>chooseStructure('barracks'));
   document.getElementById('build-structure').addEventListener('click', buildSelectedStructure);
+  document.getElementById('retry-button').addEventListener('click', resetMap);
+  document.getElementById('return-home-button').addEventListener('click', ()=> window.location.href = 'index.html');
 
   window.mapActions = {
     gather() {
@@ -923,14 +955,39 @@
     }
   };
 
+  function resetMap() {
+    hideGameOver();
+    Object.keys(inventory).forEach(key => inventory[key] = 0);
+    totalCollected = 0;
+    currentStructureChoice = null;
+    enemyUnits.length = 0;
+    movingUnits.length = 0;
+    if(enemyWaveInterval) {
+      clearInterval(enemyWaveInterval);
+      enemyWaveInterval = null;
+    }
+    nextWaveTimestamp = Date.now() + WAVE_INTERVAL_MS;
+    const chooseButton = document.getElementById('choose-structure');
+    if(chooseButton) chooseButton.textContent = 'Elegir barraca';
+    updateCounters();
+    buildMap();
+    updateInventoryPanel();
+    renderSelectedInfo();
+    drawGrid();
+    startEnemyWaves(false);
+    addLog('El mapa se reinició. Tu castillo está de nuevo en el centro.');
+  }
+
   function drawLoop() {
     if(readyCount >= Object.keys(ASSETS).length) {
       const now = Date.now();
       const dt = now - lastFrameTime;
       lastFrameTime = now;
-      updateWorkers(dt);
-      updateMovingUnits(dt);
-      updateEnemyUnits(dt);
+      if(!gameOver) {
+        updateWorkers(dt);
+        updateMovingUnits(dt);
+        updateEnemyUnits(dt);
+      }
       drawGrid();
       drawMovingUnits();
       drawEnemyUnits();

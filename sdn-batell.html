@@ -206,6 +206,50 @@
       font-weight: 600;
     }
 
+    .game-over-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.85);
+      z-index: 999;
+    }
+
+    .game-over-overlay.hidden {
+      display: none;
+    }
+
+    .game-over-card {
+      width: min(100%, 460px);
+      padding: 32px;
+      border-radius: 28px;
+      background: rgba(15, 23, 42, 0.98);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+      text-align: center;
+    }
+
+    .game-over-card h2 {
+      margin: 0 0 16px;
+      font-size: 2rem;
+      color: #f8fafc;
+    }
+
+    .game-over-card p {
+      margin: 0 0 24px;
+      color: #cbd5e1;
+      line-height: 1.75;
+      font-size: 1rem;
+    }
+
+    .game-over-actions {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
     @media (max-width: 920px) {
       .layout {
         grid-template-columns: 1fr;
@@ -252,6 +296,18 @@
       <span style="color:#9ca3af;">Usa los recursos de la carpeta elementos para el mapa.</span>
     </div>
   </main>
+
+  <div id="game-over-overlay" class="game-over-overlay hidden">
+    <div class="game-over-card">
+      <h2>¡Perdido!</h2>
+      <p>Tu castillo ha sido destruido. Elige una opción para continuar.</p>
+      <div class="game-over-actions">
+        <button class="button" id="retry-button">Reintentar</button>
+        <button class="button secondary" id="return-home-button">Volver al inicio</button>
+      </div>
+    </div>
+  </div>
+
   <script src="mapa.js" defer></script>
 </body>
 </html>
