@@ -191,7 +191,7 @@
       const chosen = empties[Math.floor(Math.random() * empties.length)];
       chosen.type = 'cave';
       chosen.collected = false;
-      chosen.usesRemaining = 2;
+      chosen.usesRemaining = Infinity; // cuevas con uso infinito
       chosen.reserved = false;
     }
   }
@@ -365,10 +365,15 @@
 
   function drawWorkers() {
     activeWorkers.forEach(worker => {
-      // block-by-block: show worker at origin while going, at target while building/returning
-      const posTile = (worker.phase === 'going') ? worker.from : worker.to;
-      const px = posTile.x * TILE + TILE / 2;
-      const py = posTile.y * TILE + TILE / 2;
+      const start = worker.phase === 'going' ? worker.from : worker.to;
+      const end = worker.phase === 'going' ? worker.to : worker.from;
+      const sx = start.x * TILE + TILE / 2;
+      const sy = start.y * TILE + TILE / 2;
+      const ex = end.x * TILE + TILE / 2;
+      const ey = end.y * TILE + TILE / 2;
+      const t = Math.min(1, (worker.stepProgress || 0) / (worker.stepMs || MS_PER_BLOCK));
+      const px = sx + (ex - sx) * t;
+      const py = sy + (ey - sy) * t;
       if(assetImages[worker.type]?.complete) {
         ctx.drawImage(assetImages[worker.type], px - TILE/6, py - TILE/6, TILE/3, TILE/3);
       }
@@ -553,13 +558,14 @@
       description = rockNote;
       buttons = `<button class="button" onclick="window.mapActions.gather()" ${gatherNeedsMiners ? 'disabled' : ''}>Minar piedra (${rockCost})</button>`;
     } else if(selectedTile.type === 'cave') {
-      const uses = typeof selectedTile.usesRemaining === 'number' ? selectedTile.usesRemaining : 2;
+      const rawUses = selectedTile.usesRemaining;
+      const usesLabel = rawUses === Infinity ? '∞' : (typeof rawUses === 'number' ? rawUses : 2);
       const caveNote = inventory.mineros > 0
-        ? `Cueva: da piedra, mineral y a veces oro, hierro o cobre. Usos restantes: ${uses}.`
+        ? `Cueva: da piedra, mineral y a veces oro, hierro o cobre. Usos restantes: ${usesLabel}.`
         : 'Necesitas mineros para poder extraer de la cueva.';
       const caveCost = 'Requiere 1 minero';
       description = caveNote;
-      const caveDisabled = gatherNeedsMiners || selectedTile.reserved || uses <= 0;
+      const caveDisabled = gatherNeedsMiners || selectedTile.reserved || (typeof rawUses === 'number' && rawUses <= 0);
       buttons = `<button class="button" onclick="window.mapActions.gather()" ${caveDisabled ? 'disabled' : ''}>Extraer de la cueva (${caveCost})</button>`;
       if(selectedTile.reserved) {
         description += ' Un minero ya está extrayendo aquí.';
@@ -776,9 +782,13 @@
         enemyUnits.splice(i, 1);
         continue;
       }
-      enemy.stepProgress += dt;
+      // smooth interpolation between tiles
       const next = enemy.path[enemy.index];
-      // discrete block-by-block movement: update position only when step completes
+      const prev = { x: enemy.pos.x, y: enemy.pos.y };
+      enemy.stepProgress += dt;
+      const t = Math.min(1, enemy.stepProgress / enemy.stepMs);
+      enemy.pos.x = prev.x + (next.x - prev.x) * t;
+      enemy.pos.y = prev.y + (next.y - prev.y) * t;
       if(enemy.stepProgress >= enemy.stepMs) {
         enemy.pos.x = next.x;
         enemy.pos.y = next.y;
@@ -832,10 +842,14 @@
         addLog(`El ${unit.type} llegó a su destino explorado.`);
         return;
       }
-      unit.stepProgress += dt;
       const next = unit.path[unit.index];
-      // discrete block-by-block movement: update position only when step completes
+      const prev = { x: unit.pos.x, y: unit.pos.y };
+      unit.stepProgress += dt;
+      const t = Math.min(1, unit.stepProgress / unit.stepMs);
+      unit.pos.x = prev.x + (next.x - prev.x) * t;
+      unit.pos.y = prev.y + (next.y - prev.y) * t;
       if(unit.stepProgress >= unit.stepMs) {
+        // advance to next tile
         unit.pos.x = next.x;
         unit.pos.y = next.y;
         unit.index += 1;
