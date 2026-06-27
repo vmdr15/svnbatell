@@ -456,7 +456,7 @@
       addLog('Un leñador parte hacia el árbol. El árbol permanecerá hasta que llegue el leñador.');
     } else if(tile.type === 'rock' && !tile.collected) {
       if(inventory.mineros <= 0) {
-        addLog('Necesitas mineros para minar piedra. Crea mineros en el castillo.');
+        addLog('nesesitas mineros');
         return;
       }
       inventory.mineros -= 1;
@@ -469,7 +469,7 @@
         return;
       }
       if(inventory.mineros <= 0) {
-        addLog('Necesitas mineros para extraer de la cueva. Crea mineros en el castillo.');
+        addLog('nesesitas mineros');
         return;
       }
       inventory.mineros -= 1;
@@ -496,7 +496,7 @@
     const cost = unitType === 'caballero' ? COSTS.caballero : COSTS.arquero;
     const canPay = Object.entries(cost).every(([key, amount]) => (inventory[key] || 0) >= amount);
     if(!canPay) {
-      addLog('No tienes suficientes recursos para crear la unidad. Revisa los costos.');
+      addLog('nesesitas mas materiales');
       addLog(`Costos para ${unitType}: ${Object.entries(cost).map(([k,v])=>v+" "+k).join(', ')}`);
       return;
     }
@@ -521,7 +521,7 @@
     const cost = { mineral: 6, oro: 2, hierro: 4, cobre: 3 };
     const canPay = Object.entries(cost).every(([key, amount]) => inventory[key] >= amount);
     if(!canPay) {
-      addLog('No tienes suficientes mineral, oro, hierro o cobre para reparar.');
+      addLog('nesesitas mas materiales');
       return;
     }
     Object.entries(cost).forEach(([key, amount]) => inventory[key] -= amount);
@@ -645,7 +645,7 @@
     const cost = COSTS.barracks;
     const canPay = Object.entries(cost).every(([key, amount]) => (inventory[key] || 0) >= amount);
     if(!canPay) {
-      addLog('No tienes suficientes recursos para construir barracas. Revisa los costos.');
+      addLog('nesesitas ma materiales');
       addLog(`Costos para barracas: ${Object.entries(cost).map(([k,v])=>v+" "+k).join(', ')}`);
       return;
     }
@@ -675,7 +675,7 @@
     const cost = COSTS.minero;
     const canPay = Object.entries(cost).every(([key, amount]) => (inventory[key] || 0) >= amount);
     if(!canPay) {
-      addLog('No tienes suficientes recursos para crear un minero. Revisa los costos.');
+      addLog('nesesitas ma materiales');
       addLog(`Costos para minero: ${Object.entries(cost).map(([k,v])=>v+" "+k).join(', ')}`);
       return;
     }
