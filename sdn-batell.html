@@ -108,6 +108,24 @@
       line-height: 1.7;
     }
 
+    .mini-map-box {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 16px;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .mini-map-box canvas {
+      width: 100%;
+      max-width: 220px;
+      height: auto;
+      display: block;
+      border-radius: 12px;
+      background: rgba(7, 11, 20, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
     .mission-header {
       display: flex;
       justify-content: space-between;
@@ -313,6 +331,9 @@
           <button class="button" id="start-mission">Iniciar misión</button>
         </div>
         <div class="mission-panel" id="mission-panel"></div>
+        <div class="mini-map-box" id="mini-map-box" hidden>
+          <canvas id="mini-map-canvas" width="220" height="140"></canvas>
+        </div>
       </div>
 
       <div class="panel">

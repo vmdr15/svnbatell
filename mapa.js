@@ -62,9 +62,17 @@
   let totalCollected = 0;
   let currentMapMode = 'local';
   const TOTAL_MISSIONS = 20;
+  const STORY_REGIONS = [
+    { name: 'Tutorial', missions: 1 },
+    { name: 'Planicie', missions: 5 },
+    { name: 'Bosque', missions: 5 },
+    { name: 'Desierto', missions: 5 },
+    { name: 'Montaña', missions: 4 }
+  ];
   let currentMission = 1;
   let missionNightCount = 1;
   let missionGoal = 1;
+  let currentRegion = 'Tutorial';
   let missionActive = false;
   let missionCompleted = false;
   let missionTimer = 0;
@@ -930,6 +938,56 @@
     });
   }
 
+  function drawMiniMap() {
+    const box = document.getElementById('mini-map-box');
+    const canvas = document.getElementById('mini-map-canvas');
+    if(!box || !canvas) return;
+    const ctxMini = canvas.getContext('2d');
+    const size = 220;
+    ctxMini.clearRect(0, 0, size, size);
+    if(currentMapMode !== 'path') {
+      box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    ctxMini.fillStyle = '#07111d';
+    ctxMini.fillRect(0, 0, size, size);
+    ctxMini.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctxMini.lineWidth = 1;
+    for(let i = 0; i <= 4; i++) {
+      const pos = i * 44;
+      ctxMini.beginPath();
+      ctxMini.moveTo(0, pos);
+      ctxMini.lineTo(size, pos);
+      ctxMini.stroke();
+      ctxMini.beginPath();
+      ctxMini.moveTo(pos, 0);
+      ctxMini.lineTo(pos, size);
+      ctxMini.stroke();
+    }
+    ctxMini.fillStyle = '#38bdf8';
+    const startX = size * 0.2;
+    const startY = size * 0.25;
+    const midX = size * 0.5;
+    const midY = size * 0.5;
+    const endX = size * 0.8;
+    const endY = size * 0.8;
+    ctxMini.beginPath();
+    ctxMini.moveTo(startX, startY);
+    ctxMini.lineTo(midX, startY);
+    ctxMini.lineTo(midX, midY);
+    ctxMini.lineTo(endX, midY);
+    ctxMini.lineTo(endX, endY);
+    ctxMini.strokeStyle = '#38bdf8';
+    ctxMini.lineWidth = 3;
+    ctxMini.stroke();
+    ctxMini.fillRect(startX - 4, startY - 4, 8, 8);
+    ctxMini.fillRect(endX - 4, endY - 4, 8, 8);
+    ctxMini.fillStyle = '#f59e0b';
+    ctxMini.fillRect(midX - 4, midY - 4, 8, 8);
+    ctxMini.fillRect(size * 0.5 - 4, size * 0.2 - 4, 8, 8);
+  }
+
   function chooseStructure(type) {
     currentStructureChoice = type;
     const button = document.getElementById('choose-structure');
@@ -955,15 +1013,27 @@
     const missionLabel = missionActive ? `Misión activa · Noche ${missionNightCount}/${missionGoal}` : `Misión ${Math.min(currentMission, TOTAL_MISSIONS)}`;
     const state = missionCompleted ? 'Completada' : (missionActive ? 'En curso' : 'Pendiente');
     const progressText = missionActive ? `Progreso: ${Math.min(missionNightCount - 1, missionGoal)}/${missionGoal}` : `Progreso de historia: ${Math.min(currentMission - 1, TOTAL_MISSIONS)}/${TOTAL_MISSIONS}`;
+    const regionName = getRegionForMission(currentMission);
+    currentRegion = regionName;
     panel.innerHTML = `
       <div class="mission-header">
         <strong>${missionLabel}</strong>
         <span>${state}</span>
       </div>
+      <div>Región: ${regionName}</div>
       <div>Sobrevive a ${missionGoal} noches de ataque. Cada noche aumenta la cantidad de enemigos.</div>
       <div>${progressText}</div>
       <div>Mapa actual: ${currentMapMode === 'local' ? 'Local con castillo, base y recursos' : 'Camino de misión con nodos y recursos'}</div>
     `;
+  }
+
+  function getRegionForMission(missionNumber) {
+    let count = 0;
+    for(const region of STORY_REGIONS) {
+      count += region.missions;
+      if(missionNumber <= count) return region.name;
+    }
+    return 'Montaña';
   }
 
   function startMission() {
@@ -975,7 +1045,9 @@
     missionActive = true;
     missionCompleted = false;
     missionNightCount = 1;
-    missionGoal = Math.min(2 + currentMission, 8);
+    const region = getRegionForMission(currentMission);
+    const baseGoal = region === 'Tutorial' ? 1 : region === 'Planicie' ? 2 : region === 'Bosque' ? 3 : region === 'Desierto' ? 4 : 5;
+    missionGoal = Math.min(baseGoal + Math.floor((currentMission - 1) / 4), 8);
     totalCollected = 0;
     inventory.madera = 0;
     inventory.piedra = 0;
@@ -993,8 +1065,9 @@
     updateInventoryPanel();
     renderSelectedInfo();
     drawGrid();
+    drawMiniMap();
     nextWaveTimestamp = Date.now() + WAVE_INTERVAL_MS;
-    addLog(`¡Comienza la misión ${currentMission}/${TOTAL_MISSIONS}! Sobrevive a ${missionGoal} noches.`);
+    addLog(`¡Comienza la misión ${currentMission}/${TOTAL_MISSIONS} en ${region}! Sobrevive a ${missionGoal} noches.`);
     updateMissionPanel();
     updateCounters();
     startEnemyWaves(true);
@@ -1069,8 +1142,8 @@
   document.getElementById('reset-map').addEventListener('click', resetMap);
   document.getElementById('choose-structure').addEventListener('click', ()=>chooseStructure('barracks'));
   document.getElementById('build-structure').addEventListener('click', buildSelectedStructure);
-  document.getElementById('select-local-map').addEventListener('click', ()=> { currentMapMode = 'local'; buildMap(); updateMissionPanel(); addLog('Mapa local activado: castillo, base y recursos.'); });
-  document.getElementById('select-path-map').addEventListener('click', ()=> { currentMapMode = 'path'; buildMap(); updateMissionPanel(); addLog('Mapa del camino activado: misión por nodos y recursos.'); });
+  document.getElementById('select-local-map').addEventListener('click', ()=> { currentMapMode = 'local'; buildMap(); updateMissionPanel(); drawMiniMap(); addLog('Mapa local activado: castillo, base y recursos.'); });
+  document.getElementById('select-path-map').addEventListener('click', ()=> { currentMapMode = 'path'; buildMap(); updateMissionPanel(); drawMiniMap(); addLog('Mapa del camino activado: misión por nodos y recursos.'); });
   document.getElementById('start-mission').addEventListener('click', startMission);
   document.getElementById('retry-button').addEventListener('click', resetMap);
   document.getElementById('return-home-button').addEventListener('click', ()=> window.location.href = 'index.html');
@@ -1143,6 +1216,7 @@
 
   buildMap();
   updateMissionPanel();
+  drawMiniMap();
   // Start enemy wave timer but do not spawn immediately at game start
   startEnemyWaves(false);
   updateInventoryPanel();
