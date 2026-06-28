@@ -60,11 +60,19 @@
   const map = [];
   let selectedTile = null;
   let totalCollected = 0;
+  let currentMapMode = 'local';
+  const TOTAL_MISSIONS = 20;
+  let currentMission = 1;
+  let missionNightCount = 1;
+  let missionGoal = 1;
+  let missionActive = false;
+  let missionCompleted = false;
+  let missionTimer = 0;
   const structureHealth = { castle: 200, barracks: 120 };
   const activeWorkers = [];
   const movingUnits = [];
   const enemyUnits = [];
-  const WAVE_INTERVAL_MS = 240000;
+  const WAVE_INTERVAL_MS = 45000;
   let enemyWaveInterval = null;
   let nextWaveTimestamp = Date.now() + WAVE_INTERVAL_MS;
   let currentStructureChoice = null;
@@ -100,7 +108,9 @@
       map.push(row);
     }
 
-    const center = { x: Math.floor(COLS/2), y: Math.floor(ROWS/2) };
+    const center = currentMapMode === 'path'
+      ? { x: Math.floor(COLS / 2), y: Math.floor(ROWS - 2) }
+      : { x: Math.floor(COLS / 2), y: Math.floor(ROWS / 2) };
     const castleTile = map[center.y][center.x];
     castleTile.type = 'castle';
     castleTile.discovered = true;
@@ -109,11 +119,52 @@
     castleTile.collected = true;
 
     createEmptyRing(center.x, center.y);
-    fillResources();
+    if(currentMapMode === 'path') {
+      createPathMap(center.x, center.y);
+    } else {
+      fillResources();
+    }
     map.forEach(row => row.forEach(tile => tile.discovered = true));
     selectedTile = castleTile;
     castleCoords = { x: center.x, y: center.y };
     activeWorkers.length = 0;
+  }
+
+  function createPathMap(cx, cy) {
+    const pathTiles = [];
+    const midX = Math.floor(COLS / 2);
+    const midY = Math.floor(ROWS / 2);
+    for(let x = 1; x < COLS - 1; x++) {
+      const tile = map[midY][x];
+      tile.type = 'empty';
+      tile.discovered = true;
+      tile.collected = true;
+      pathTiles.push(tile);
+    }
+    for(let y = midY; y < ROWS - 1; y++) {
+      const tile = map[y][COLS - 2];
+      tile.type = 'empty';
+      tile.discovered = true;
+      tile.collected = true;
+      pathTiles.push(tile);
+    }
+    pathTiles.forEach(tile => { tile.type = 'empty'; tile.discovered = true; tile.collected = true; });
+    const missionNodes = [
+      { x: Math.floor(COLS / 4), y: Math.floor(ROWS / 4) },
+      { x: Math.floor(COLS * 0.75), y: Math.floor(ROWS / 4) },
+      { x: Math.floor(COLS * 0.75), y: Math.floor(ROWS * 0.75) }
+    ];
+    missionNodes.forEach(node => {
+      const tile = map[node.y][node.x];
+      tile.type = 'cave';
+      tile.discovered = true;
+      tile.collected = false;
+      tile.usesRemaining = 2;
+    });
+    for(let i = 0; i < 4; i++) {
+      placeCluster('rock', 1, 2);
+      placeCluster('forest', 1, 2);
+    }
   }
 
   function isCenter(x,y) {
@@ -743,12 +794,13 @@
   }
 
   function spawnEnemyWave() {
-    const waveCount = 3 + Math.floor(Math.random() * 2);
+    const nightNumber = missionNightCount;
+    const waveCount = 4 + nightNumber + Math.floor(Math.random() * 2);
     for(let i = 0; i < waveCount; i++) {
       const spawn = getEnemySpawnTile();
       const type = i % 2 === 0 ? 'slime' : 'lagart';
       const path = computePath({ x: spawn.x, y: spawn.y }, { x: castleCoords.x, y: castleCoords.y });
-      const msPerBlock = MS_PER_BLOCK; // unified speed: 1.5 blocks per second
+      const msPerBlock = MS_PER_BLOCK;
       enemyUnits.push({
         type,
         pos: { x: spawn.x, y: spawn.y },
@@ -759,8 +811,14 @@
         arrived: path.length === 0
       });
     }
+    missionNightCount += 1;
     nextWaveTimestamp = Date.now() + WAVE_INTERVAL_MS;
-    addLog(`Oleada enemiga: ${waveCount} unidades (${waveCount % 2 === 0 ? 'slimes y lagarts' : 'slimes y lagart'}).`);
+    if(missionActive && missionNightCount > missionGoal) {
+      completeMission();
+      return;
+    }
+    addLog(`Noche ${nightNumber}: ${waveCount} enemigos intentando entrar a la base.`);
+    updateMissionPanel();
   }
 
   function updateEnemyUnits(dt) {
@@ -831,7 +889,11 @@
     if(spawnImmediate) {
       spawnEnemyWave();
     }
-    enemyWaveInterval = setInterval(spawnEnemyWave, WAVE_INTERVAL_MS);
+    enemyWaveInterval = setInterval(() => {
+      if(missionActive) {
+        spawnEnemyWave();
+      }
+    }, WAVE_INTERVAL_MS);
   }
 
   function updateMovingUnits(dt) {
@@ -885,6 +947,68 @@
       }
     }
     return null;
+  }
+
+  function updateMissionPanel() {
+    const panel = document.getElementById('mission-panel');
+    if(!panel) return;
+    const missionLabel = missionActive ? `Misión activa · Noche ${missionNightCount}/${missionGoal}` : `Misión ${Math.min(currentMission, TOTAL_MISSIONS)}`;
+    const state = missionCompleted ? 'Completada' : (missionActive ? 'En curso' : 'Pendiente');
+    const progressText = missionActive ? `Progreso: ${Math.min(missionNightCount - 1, missionGoal)}/${missionGoal}` : `Progreso de historia: ${Math.min(currentMission - 1, TOTAL_MISSIONS)}/${TOTAL_MISSIONS}`;
+    panel.innerHTML = `
+      <div class="mission-header">
+        <strong>${missionLabel}</strong>
+        <span>${state}</span>
+      </div>
+      <div>Sobrevive a ${missionGoal} noches de ataque. Cada noche aumenta la cantidad de enemigos.</div>
+      <div>${progressText}</div>
+      <div>Mapa actual: ${currentMapMode === 'local' ? 'Local con castillo, base y recursos' : 'Camino de misión con nodos y recursos'}</div>
+    `;
+  }
+
+  function startMission() {
+    if(currentMission > TOTAL_MISSIONS) {
+      addLog('Has completado las 20 misiones de historia.');
+      updateMissionPanel();
+      return;
+    }
+    missionActive = true;
+    missionCompleted = false;
+    missionNightCount = 1;
+    missionGoal = Math.min(2 + currentMission, 8);
+    totalCollected = 0;
+    inventory.madera = 0;
+    inventory.piedra = 0;
+    inventory.mineral = 0;
+    inventory.oro = 0;
+    inventory.hierro = 0;
+    inventory.cobre = 0;
+    inventory.mineros = 0;
+    inventory.caballeros = 0;
+    inventory.arqueros = 0;
+    enemyUnits.length = 0;
+    movingUnits.length = 0;
+    activeWorkers.length = 0;
+    buildMap();
+    updateInventoryPanel();
+    renderSelectedInfo();
+    drawGrid();
+    nextWaveTimestamp = Date.now() + WAVE_INTERVAL_MS;
+    addLog(`¡Comienza la misión ${currentMission}/${TOTAL_MISSIONS}! Sobrevive a ${missionGoal} noches.`);
+    updateMissionPanel();
+    updateCounters();
+    startEnemyWaves(true);
+  }
+
+  function completeMission() {
+    if(!missionActive) return;
+    missionCompleted = true;
+    missionActive = false;
+    if(currentMission < TOTAL_MISSIONS) {
+      currentMission += 1;
+    }
+    addLog(`¡Misión ${Math.min(currentMission, TOTAL_MISSIONS)} completada! Superaste ${missionGoal} noches.`);
+    updateMissionPanel();
   }
 
   function buildSelectedStructure() {
@@ -945,6 +1069,9 @@
   document.getElementById('reset-map').addEventListener('click', resetMap);
   document.getElementById('choose-structure').addEventListener('click', ()=>chooseStructure('barracks'));
   document.getElementById('build-structure').addEventListener('click', buildSelectedStructure);
+  document.getElementById('select-local-map').addEventListener('click', ()=> { currentMapMode = 'local'; buildMap(); updateMissionPanel(); addLog('Mapa local activado: castillo, base y recursos.'); });
+  document.getElementById('select-path-map').addEventListener('click', ()=> { currentMapMode = 'path'; buildMap(); updateMissionPanel(); addLog('Mapa del camino activado: misión por nodos y recursos.'); });
+  document.getElementById('start-mission').addEventListener('click', startMission);
   document.getElementById('retry-button').addEventListener('click', resetMap);
   document.getElementById('return-home-button').addEventListener('click', ()=> window.location.href = 'index.html');
 
@@ -973,6 +1100,9 @@
     hideGameOver();
     Object.keys(inventory).forEach(key => inventory[key] = 0);
     totalCollected = 0;
+    missionActive = false;
+    missionCompleted = false;
+    missionNightCount = 1;
     currentStructureChoice = null;
     enemyUnits.length = 0;
     movingUnits.length = 0;
@@ -984,6 +1114,7 @@
     const chooseButton = document.getElementById('choose-structure');
     if(chooseButton) chooseButton.textContent = 'Elegir barraca';
     updateCounters();
+    updateMissionPanel();
     buildMap();
     updateInventoryPanel();
     renderSelectedInfo();
@@ -1011,6 +1142,7 @@
   }
 
   buildMap();
+  updateMissionPanel();
   // Start enemy wave timer but do not spawn immediately at game start
   startEnemyWaves(false);
   updateInventoryPanel();

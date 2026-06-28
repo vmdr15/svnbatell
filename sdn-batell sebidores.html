@@ -71,7 +71,6 @@
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 24px;
       padding: 24px;
-      min-width: 0;
     }
 
     .panel h2 {
@@ -96,26 +95,6 @@
       flex-wrap: wrap;
       gap: 12px;
       align-items: center;
-    }
-
-    .mission-panel {
-      margin-top: 14px;
-      padding: 16px 18px;
-      border-radius: 18px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      color: #e2e8f0;
-      line-height: 1.7;
-    }
-
-    .mission-header {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      align-items: center;
-      flex-wrap: wrap;
-      margin-bottom: 8px;
-      color: #f8fafc;
     }
 
     .button {
@@ -289,9 +268,9 @@
 <body>
   <main class="container">
     <section class="card hero">
-      <span class="inline-label">Aventura de supervivencia</span>
+      <span class="inline-label">Mapa estilo StarCraft</span>
       <h1>Explora, recolecta y construye</h1>
-      <p>Elige entre un mapa local con castillo y recursos o un mapa con un camino de misión. Cada partida se desarrolla en noches de defensa y cada misión exige sobrevivir más noches con más enemigos.</p>
+      <p>Tu castillo está en el centro del mapa. Descubre bosques, rocas, cuevas y barracas, extrae recursos y construye caballeros o arqueros.</p>
     </section>
 
     <section class="card layout">
@@ -301,24 +280,17 @@
         <div class="toolbar">
           <button class="button" id="choose-structure">Elegir barraca</button>
           <button class="button secondary" id="build-structure">Construir</button>
-          <button class="button secondary" id="reveal-random">Explorar al azar</button>
         </div>
         <div class="toolbar" style="margin-top:12px; gap: 12px; align-items: center;">
-          <span style="color:#cbd5e1;font-weight:700;">Próxima noche: <span id="enemy-wave-timer">00:45</span></span>
+          <span style="color:#cbd5e1;font-weight:700;">Próxima oleada: <span id="enemy-wave-timer">04:00</span></span>
           <div style="margin-left:auto;color:#cbd5e1;font-weight:700;">Recursos totales: <span id="collected-count">0</span></div>
         </div>
-        <div class="toolbar" style="margin-top:12px; gap: 12px; flex-wrap: wrap;">
-          <button class="button" id="select-local-map">Mapa local</button>
-          <button class="button secondary" id="select-path-map">Mapa del camino</button>
-          <button class="button" id="start-mission">Iniciar misión</button>
-        </div>
-        <div class="mission-panel" id="mission-panel"></div>
+      </div>
+      <div class="external-action">
+        <button class="button" id="reset-map">Reiniciar mapa</button>
       </div>
 
       <div class="panel">
-        <div class="toolbar" style="margin-top:0; justify-content:flex-end;">
-          <button class="button" id="reset-map">Reiniciar mapa</button>
-        </div>
         <h2>Inventario</h2>
         <div class="inventory" id="inventory-panel"></div>
         <h2>Acciones</h2>
@@ -343,6 +315,6 @@
     </div>
   </div>
 
-  <script src="mapa.js" defer></script>
+  <script src="sevidores.js" defer></script>
 </body>
 </html>

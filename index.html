@@ -238,9 +238,8 @@
         <h1>batalla canpal</h1>
         <p>Prepárate para entrar en un mundo de estrategia y combate. Elige tus armas, domina el campo de batalla y derrota a tus rivales en una aventura épica.</p>
         <div class="buttons">
-          <a class="button-primary" href="sdn-batell.html">Modo historia</a>
-          <a class="button-primary" href="sdn-batell.html?modo=batalla libre">Batalla libre</a>
-          <button class="button-secondary" id="toggle-details" type="button">Ocultar detalles</button>
+          <a class="button-primary" href="sdn-batell.html">Aventura</a>
+          <button class="button-secondary" type="button" disabled>Batalla libre (en progreso)</button>
         </div>
         <div class="info-grid" id="detalles">
           <article class="info-card">
@@ -267,14 +266,5 @@
       </div>
     </div>
   </main>
-  <script>
-    const toggleButton = document.getElementById('toggle-details');
-    const detalles = document.getElementById('detalles');
-
-    toggleButton.addEventListener('click', () => {
-      const hidden = detalles.classList.toggle('hidden');
-      toggleButton.textContent = hidden ? 'Ver detalles' : 'Ocultar detalles';
-    });
-  </script>
 </body>
 </html>
