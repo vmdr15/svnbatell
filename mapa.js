@@ -87,6 +87,8 @@
   let castleCoords = { x: Math.floor(COLS / 2), y: Math.floor(ROWS / 2) };
   let lastFrameTime = Date.now();
   let gameOver = false;
+  let savePending = false;
+  const SAVE_KEY = 'svnbatell-adventure-state';
 
   function createTile(type) {
     return {
@@ -99,6 +101,8 @@
       structureHealth: null,
       units: { caballero: 0, arquero: 0 },
       building: false,
+      pathRoute: false,
+      missionNode: false,
       x: 0,
       y: 0
     };
@@ -128,6 +132,7 @@
 
     createEmptyRing(center.x, center.y);
     if(currentMapMode === 'path') {
+      fillResources();
       createPathMap(center.x, center.y);
     } else {
       fillResources();
@@ -139,37 +144,52 @@
   }
 
   function createPathMap(cx, cy) {
-    const pathTiles = [];
-    const midX = Math.floor(COLS / 2);
-    const midY = Math.floor(ROWS / 2);
-    for(let x = 1; x < COLS - 1; x++) {
-      const tile = map[midY][x];
-      tile.type = 'empty';
-      tile.discovered = true;
-      tile.collected = true;
-      pathTiles.push(tile);
-    }
-    for(let y = midY; y < ROWS - 1; y++) {
-      const tile = map[y][COLS - 2];
-      tile.type = 'empty';
-      tile.discovered = true;
-      tile.collected = true;
-      pathTiles.push(tile);
-    }
-    pathTiles.forEach(tile => { tile.type = 'empty'; tile.discovered = true; tile.collected = true; });
-    const missionNodes = [
-      { x: Math.floor(COLS / 4), y: Math.floor(ROWS / 4) },
-      { x: Math.floor(COLS * 0.75), y: Math.floor(ROWS / 4) },
-      { x: Math.floor(COLS * 0.75), y: Math.floor(ROWS * 0.75) }
+    const checkpoints = [
+      { x: cx, y: cy },
+      { x: Math.max(1, Math.floor(COLS / 3)), y: Math.max(1, Math.floor(ROWS / 3)) },
+      { x: Math.min(COLS - 2, Math.floor(COLS * 0.66)), y: Math.max(1, Math.floor(ROWS / 3)) },
+      { x: Math.min(COLS - 2, Math.floor(COLS * 0.66)), y: Math.min(ROWS - 2, Math.floor(ROWS * 0.72)) },
+      { x: Math.max(1, Math.floor(COLS / 4)), y: Math.min(ROWS - 2, Math.floor(ROWS * 0.82)) }
     ];
+
+    const markPath = (from, to) => {
+      let x = from.x;
+      let y = from.y;
+      while(x !== to.x || y !== to.y) {
+        if(x !== to.x) x += x < to.x ? 1 : -1;
+        else if(y !== to.y) y += y < to.y ? 1 : -1;
+        const tile = map[y] && map[y][x];
+        if(tile) {
+          tile.pathRoute = true;
+          tile.discovered = true;
+          tile.collected = true;
+          tile.type = 'empty';
+        }
+      }
+    };
+
+    for(let i = 1; i < checkpoints.length; i++) {
+      markPath(checkpoints[i - 1], checkpoints[i]);
+    }
+
+    const missionNodes = [
+      checkpoints[1],
+      checkpoints[2],
+      checkpoints[3],
+      checkpoints[4]
+    ];
+
     missionNodes.forEach(node => {
-      const tile = map[node.y][node.x];
-      tile.type = 'cave';
-      tile.discovered = true;
-      tile.collected = false;
-      tile.usesRemaining = 2;
+      const tile = map[node.y] && map[node.y][node.x];
+      if(tile) {
+        tile.missionNode = true;
+        tile.pathRoute = true;
+        tile.discovered = true;
+        tile.collected = true;
+      }
     });
-    for(let i = 0; i < 4; i++) {
+
+    for(let i = 0; i < 3; i++) {
       placeCluster('rock', 1, 2);
       placeCluster('forest', 1, 2);
     }
@@ -295,6 +315,24 @@
           if(tile.type && assetImages[tile.type]?.complete){
             ctx.drawImage(assetImages[tile.type], px+4, py+4, TILE-8, TILE-8);
           }
+          if(currentMapMode === 'path' && tile.pathRoute) {
+            ctx.fillStyle = 'rgba(192, 120, 18, 0.95)';
+            ctx.fillRect(px + 8, py + 8, TILE - 16, TILE - 16);
+            ctx.fillStyle = 'rgba(255, 215, 0, 0.65)';
+            ctx.fillRect(px + 12, py + 12, TILE - 24, TILE - 24);
+            ctx.strokeStyle = 'rgba(255, 248, 220, 0.8)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(px + 10, py + 10, TILE - 20, TILE - 20);
+          }
+          if(currentMapMode === 'path' && tile.missionNode) {
+            ctx.beginPath();
+            ctx.arc(px + TILE/2, py + TILE/2, TILE/4.2, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(245, 158, 11, 0.95)';
+            ctx.fill();
+            ctx.strokeStyle = '#fff7ed';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
           if(tile.structure === 'castle' && inventory.mineros > 0 && assetImages.minero.complete) {
             ctx.drawImage(assetImages.minero, px+6, py+6, TILE/2.2, TILE/2.2);
           }
@@ -309,6 +347,11 @@
         if(!tile.discovered){
           ctx.fillStyle = 'rgba(0,0,0,0.90)';
           ctx.fillRect(px, py, TILE-1, TILE-1);
+        }
+
+        if(currentMapMode === 'path' && tile.pathRoute) {
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.12)';
+          ctx.fillRect(px + 2, py + 2, TILE - 4, TILE - 4);
         }
 
         if(selectedTile && selectedTile.x === x && selectedTile.y === y){
@@ -593,6 +636,98 @@
 
   function updateCounters() {
     document.getElementById('collected-count').textContent = totalCollected;
+  }
+
+  function saveAdventureState() {
+    const state = {
+      currentMission,
+      currentMapMode,
+      missionNightCount,
+      missionGoal,
+      missionActive,
+      missionCompleted,
+      totalCollected,
+      inventory,
+      currentRegion,
+      castleCoords,
+      selectedTile: selectedTile ? { x: selectedTile.x, y: selectedTile.y } : null
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+    addLog('Progreso guardado.');
+  }
+
+  function loadAdventureState() {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if(!raw) return false;
+    try {
+      const state = JSON.parse(raw);
+      currentMission = state.currentMission || 1;
+      currentMapMode = state.currentMapMode || 'local';
+      missionNightCount = state.missionNightCount || 1;
+      missionGoal = state.missionGoal || 1;
+      missionActive = Boolean(state.missionActive);
+      missionCompleted = Boolean(state.missionCompleted);
+      totalCollected = state.totalCollected || 0;
+      Object.assign(inventory, state.inventory || inventory);
+      currentRegion = state.currentRegion || 'Tutorial';
+      castleCoords = state.castleCoords || castleCoords;
+      selectedTile = null;
+      buildMap();
+      updateInventoryPanel();
+      renderSelectedInfo();
+      drawGrid();
+      drawMiniMap();
+      updateMissionPanel();
+      updateCounters();
+      addLog('Se cargó una aventura guardada.');
+      return true;
+    } catch (error) {
+      console.error('No se pudo cargar el progreso', error);
+      return false;
+    }
+  }
+
+  function deleteAdventureState() {
+    localStorage.removeItem(SAVE_KEY);
+    currentMission = 1;
+    currentMapMode = 'local';
+    missionNightCount = 1;
+    missionGoal = 1;
+    currentRegion = 'Tutorial';
+    missionActive = false;
+    missionCompleted = false;
+    totalCollected = 0;
+    Object.keys(inventory).forEach(key => inventory[key] = 0);
+    buildMap();
+    updateInventoryPanel();
+    renderSelectedInfo();
+    drawGrid();
+    drawMiniMap();
+    updateMissionPanel();
+    updateCounters();
+    addLog('Se eliminó la aventura guardada.');
+  }
+
+  function openAdventureMenu() {
+    const menu = document.getElementById('adventure-menu');
+    if(menu) menu.classList.remove('hidden');
+  }
+
+  function closeAdventureMenu() {
+    const menu = document.getElementById('adventure-menu');
+    if(menu) menu.classList.add('hidden');
+  }
+
+  function askSaveAndExit() {
+    const modal = document.getElementById('save-modal');
+    if(modal) modal.classList.remove('hidden');
+    savePending = true;
+  }
+
+  function closeSaveModal() {
+    const modal = document.getElementById('save-modal');
+    if(modal) modal.classList.add('hidden');
+    savePending = false;
   }
 
   function renderSelectedInfo() {
@@ -1146,7 +1281,19 @@
   document.getElementById('select-path-map').addEventListener('click', ()=> { currentMapMode = 'path'; buildMap(); updateMissionPanel(); drawMiniMap(); addLog('Mapa del camino activado: misión por nodos y recursos.'); });
   document.getElementById('start-mission').addEventListener('click', startMission);
   document.getElementById('retry-button').addEventListener('click', resetMap);
-  document.getElementById('return-home-button').addEventListener('click', ()=> window.location.href = 'index.html');
+  document.getElementById('return-home-button').addEventListener('click', ()=> { askSaveAndExit(); });
+  document.getElementById('save-and-exit').addEventListener('click', ()=> { saveAdventureState(); closeSaveModal(); window.location.href = 'index.html'; });
+  document.getElementById('cancel-save').addEventListener('click', ()=> { closeSaveModal(); });
+  document.getElementById('create-adventure').addEventListener('click', ()=> { deleteAdventureState(); closeAdventureMenu(); startMission(); });
+  document.getElementById('continue-adventure').addEventListener('click', ()=> { closeAdventureMenu(); loadAdventureState(); });
+  document.getElementById('delete-adventure').addEventListener('click', ()=> { deleteAdventureState(); closeAdventureMenu(); });
+
+  window.addEventListener('beforeunload', (event) => {
+    if(savePending) return;
+    saveAdventureState();
+    event.preventDefault();
+    event.returnValue = '';
+  });
 
   window.mapActions = {
     gather() {
@@ -1217,6 +1364,7 @@
   buildMap();
   updateMissionPanel();
   drawMiniMap();
+  openAdventureMenu();
   // Start enemy wave timer but do not spawn immediately at game start
   startEnemyWaves(false);
   updateInventoryPanel();
