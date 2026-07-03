@@ -59,8 +59,11 @@
   const tileTypes = ['forest', 'rock', 'cave'];
   const map = [];
   let selectedTile = null;
+  let hoverTile = null;
   let totalCollected = 0;
   let currentMapMode = 'local';
+  const savedMaps = { local: null, path: null };
+  let enemiesKilled = 0;
   const TOTAL_MISSIONS = 20;
   const STORY_REGIONS = [
     { name: 'Tutorial', missions: 1 },
@@ -106,6 +109,45 @@
       x: 0,
       y: 0
     };
+  }
+
+  function cloneMap(source) {
+    return source.map(row => row.map(tile => ({
+      ...tile,
+      units: { ...tile.units }
+    })));
+  }
+
+  function saveCurrentMapState() {
+    savedMaps[currentMapMode] = {
+      map: cloneMap(map),
+      selectedTile: selectedTile ? { x: selectedTile.x, y: selectedTile.y } : null,
+      castleCoords: { ...castleCoords }
+    };
+  }
+
+  function restoreMapState(mode) {
+    const state = savedMaps[mode];
+    if(!state) return false;
+    map.length = 0;
+    state.map.forEach(row => map.push(row.map(tile => ({ ...tile, units: { ...tile.units } }))));
+    castleCoords = { ...state.castleCoords };
+    selectedTile = state.selectedTile ? map[state.selectedTile.y][state.selectedTile.x] : null;
+    return true;
+  }
+
+  function switchMapMode(mode) {
+    if(currentMapMode === mode) return;
+    saveCurrentMapState();
+    currentMapMode = mode;
+    if(!restoreMapState(mode)) {
+      buildMap();
+    }
+    updateMissionPanel();
+    renderSelectedInfo();
+    drawGrid();
+    drawMiniMap();
+    addLog(`Mapa ${mode === 'local' ? 'local' : 'del camino'} activado.`);
   }
 
   function buildMap() {
@@ -173,16 +215,17 @@
     }
 
     const missionNodes = [
-      checkpoints[1],
-      checkpoints[2],
-      checkpoints[3],
-      checkpoints[4]
+      { ...checkpoints[1], missionNodeIndex: 1 },
+      { ...checkpoints[2], missionNodeIndex: 2 },
+      { ...checkpoints[3], missionNodeIndex: 3 },
+      { ...checkpoints[4], missionNodeIndex: 4 }
     ];
 
     missionNodes.forEach(node => {
       const tile = map[node.y] && map[node.y][node.x];
       if(tile) {
         tile.missionNode = true;
+        tile.missionNodeIndex = node.missionNodeIndex;
         tile.pathRoute = true;
         tile.discovered = true;
         tile.collected = true;
@@ -301,6 +344,16 @@
     }
   }
 
+  function getMissionNodeColor(index) {
+    const colors = {
+      1: 'rgba(248, 113, 113, 0.95)',
+      2: 'rgba(249, 115, 22, 0.95)',
+      3: 'rgba(34, 197, 94, 0.95)',
+      4: 'rgba(59, 130, 246, 0.95)'
+    };
+    return colors[index] || 'rgba(245, 158, 11, 0.95)';
+  }
+
   function drawGrid() {
     ctx.clearRect(0,0,canvas.width,canvas.height);
     for(let y=0;y<ROWS;y++){
@@ -316,21 +369,20 @@
             ctx.drawImage(assetImages[tile.type], px+4, py+4, TILE-8, TILE-8);
           }
           if(currentMapMode === 'path' && tile.pathRoute) {
-            ctx.fillStyle = 'rgba(192, 120, 18, 0.95)';
-            ctx.fillRect(px + 8, py + 8, TILE - 16, TILE - 16);
-            ctx.fillStyle = 'rgba(255, 215, 0, 0.65)';
-            ctx.fillRect(px + 12, py + 12, TILE - 24, TILE - 24);
-            ctx.strokeStyle = 'rgba(255, 248, 220, 0.8)';
+            ctx.fillStyle = 'rgba(37, 99, 235, 0.24)';
+            ctx.fillRect(px + 6, py + 6, TILE - 12, TILE - 12);
+            ctx.strokeStyle = 'rgba(59, 130, 246, 0.45)';
             ctx.lineWidth = 2;
-            ctx.strokeRect(px + 10, py + 10, TILE - 20, TILE - 20);
+            ctx.strokeRect(px + 8, py + 8, TILE - 16, TILE - 16);
           }
           if(currentMapMode === 'path' && tile.missionNode) {
+            const color = getMissionNodeColor(tile.missionNodeIndex);
             ctx.beginPath();
             ctx.arc(px + TILE/2, py + TILE/2, TILE/4.2, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(245, 158, 11, 0.95)';
+            ctx.fillStyle = color;
             ctx.fill();
-            ctx.strokeStyle = '#fff7ed';
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = hoverTile === tile ? '#ffffff' : '#f8fafc';
+            ctx.lineWidth = hoverTile === tile ? 4 : 2;
             ctx.stroke();
           }
           if(tile.structure === 'castle' && inventory.mineros > 0 && assetImages.minero.complete) {
@@ -647,6 +699,7 @@
       missionActive,
       missionCompleted,
       totalCollected,
+      enemiesKilled,
       inventory,
       currentRegion,
       castleCoords,
@@ -668,6 +721,7 @@
       missionActive = Boolean(state.missionActive);
       missionCompleted = Boolean(state.missionCompleted);
       totalCollected = state.totalCollected || 0;
+      enemiesKilled = state.enemiesKilled || 0;
       Object.assign(inventory, state.inventory || inventory);
       currentRegion = state.currentRegion || 'Tutorial';
       castleCoords = state.castleCoords || castleCoords;
@@ -733,6 +787,18 @@
   function renderSelectedInfo() {
     const info = document.getElementById('selected-info');
     if(!info) return;
+    if(hoverTile && currentMapMode === 'path' && hoverTile.missionNode) {
+      const nodeIndex = hoverTile.missionNodeIndex || 1;
+      const estimatedNights = nodeIndex + 1;
+      const estimatedEnemies = 4 + nodeIndex * 2;
+      info.innerHTML = `
+        <div class="info-row"><span><strong>Nodo de misión:</strong></span><span>${nodeIndex}/4</span></div>
+        <div class="info-row"><span><strong>Noches estimadas:</strong></span><span>${estimatedNights}</span></div>
+        <div class="info-row"><span><strong>Enemigos aproximados:</strong></span><span>${estimatedEnemies}</span></div>
+        <p class="status-note">Coloca el cursor sobre otro nodo para comparar misiones, o haz clic para seleccionar el tile.</p>
+      `;
+      return;
+    }
     if(!selectedTile) {
       info.innerHTML = '<p>Haz clic en un tile descubierto para ver detalles.</p>';
       return;
@@ -999,6 +1065,23 @@
     }
   }
 
+  function handleUnitEnemyCollisions() {
+    for(let u = 0; u < movingUnits.length; u++) {
+      const unit = movingUnits[u];
+      const unitTileX = Math.round(unit.pos.x);
+      const unitTileY = Math.round(unit.pos.y);
+      for(let e = enemyUnits.length - 1; e >= 0; e--) {
+        const enemy = enemyUnits[e];
+        if(Math.round(enemy.pos.x) === unitTileX && Math.round(enemy.pos.y) === unitTileY) {
+          enemyUnits.splice(e, 1);
+          enemiesKilled += 1;
+          addLog(`Un ${unit.type} eliminó a un ${enemy.type}.`);
+          updateMissionPanel();
+        }
+      }
+    }
+  }
+
   function drawEnemyUnits() {
     enemyUnits.forEach(enemy => {
       const px = enemy.pos.x * TILE + TILE / 2;
@@ -1145,9 +1228,12 @@
   function updateMissionPanel() {
     const panel = document.getElementById('mission-panel');
     if(!panel) return;
-    const missionLabel = missionActive ? `Misión activa · Noche ${missionNightCount}/${missionGoal}` : `Misión ${Math.min(currentMission, TOTAL_MISSIONS)}`;
+    const nightsPassed = missionActive
+      ? Math.max(0, missionNightCount - 1)
+      : Math.max(0, Math.min(missionNightCount - 1, missionGoal));
+    const missionLabel = missionActive ? `Misión activa · Noche ${Math.min(nightsPassed, missionGoal)}/${missionGoal}` : `Misión ${Math.min(currentMission, TOTAL_MISSIONS)}`;
     const state = missionCompleted ? 'Completada' : (missionActive ? 'En curso' : 'Pendiente');
-    const progressText = missionActive ? `Progreso: ${Math.min(missionNightCount - 1, missionGoal)}/${missionGoal}` : `Progreso de historia: ${Math.min(currentMission - 1, TOTAL_MISSIONS)}/${TOTAL_MISSIONS}`;
+    const progressText = missionActive ? `Progreso: ${Math.min(nightsPassed, missionGoal)}/${missionGoal}` : `Progreso de historia: ${Math.min(currentMission - 1, TOTAL_MISSIONS)}/${TOTAL_MISSIONS}`;
     const regionName = getRegionForMission(currentMission);
     currentRegion = regionName;
     panel.innerHTML = `
@@ -1156,7 +1242,9 @@
         <span>${state}</span>
       </div>
       <div>Región: ${regionName}</div>
-      <div>Sobrevive a ${missionGoal} noches de ataque. Cada noche aumenta la cantidad de enemigos.</div>
+      <div>Noches llevadas: ${nightsPassed}</div>
+      <div>Noches objetivo: ${missionGoal}</div>
+      <div>Enemigos eliminados: ${enemiesKilled}</div>
       <div>${progressText}</div>
       <div>Mapa actual: ${currentMapMode === 'local' ? 'Local con castillo, base y recursos' : 'Camino de misión con nodos y recursos'}</div>
     `;
@@ -1180,6 +1268,7 @@
     missionActive = true;
     missionCompleted = false;
     missionNightCount = 1;
+    enemiesKilled = 0;
     const region = getRegionForMission(currentMission);
     const baseGoal = region === 'Tutorial' ? 1 : region === 'Planicie' ? 2 : region === 'Bosque' ? 3 : region === 'Desierto' ? 4 : 5;
     missionGoal = Math.min(baseGoal + Math.floor((currentMission - 1) / 4), 8);
@@ -1273,12 +1362,40 @@
     }
   });
 
+  canvas.addEventListener('mousemove', (event) => {
+    if(currentMapMode !== 'path') return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = Math.floor((event.clientX - rect.left) * scaleX / TILE);
+    const y = Math.floor((event.clientY - rect.top) * scaleY / TILE);
+    const tile = map[y] && map[y][x];
+    if(tile && tile.missionNode) {
+      if(hoverTile !== tile) {
+        hoverTile = tile;
+        renderSelectedInfo();
+      }
+      return;
+    }
+    if(hoverTile) {
+      hoverTile = null;
+      renderSelectedInfo();
+    }
+  });
+
+  canvas.addEventListener('mouseout', () => {
+    if(hoverTile) {
+      hoverTile = null;
+      renderSelectedInfo();
+    }
+  });
+
   document.getElementById('reveal-random').addEventListener('click', autoExplore);
   document.getElementById('reset-map').addEventListener('click', resetMap);
   document.getElementById('choose-structure').addEventListener('click', ()=>chooseStructure('barracks'));
   document.getElementById('build-structure').addEventListener('click', buildSelectedStructure);
-  document.getElementById('select-local-map').addEventListener('click', ()=> { currentMapMode = 'local'; buildMap(); updateMissionPanel(); drawMiniMap(); addLog('Mapa local activado: castillo, base y recursos.'); });
-  document.getElementById('select-path-map').addEventListener('click', ()=> { currentMapMode = 'path'; buildMap(); updateMissionPanel(); drawMiniMap(); addLog('Mapa del camino activado: misión por nodos y recursos.'); });
+  document.getElementById('select-local-map').addEventListener('click', ()=> switchMapMode('local'));
+  document.getElementById('select-path-map').addEventListener('click', ()=> switchMapMode('path'));
   document.getElementById('start-mission').addEventListener('click', startMission);
   document.getElementById('retry-button').addEventListener('click', resetMap);
   document.getElementById('return-home-button').addEventListener('click', ()=> { askSaveAndExit(); });
@@ -1320,6 +1437,7 @@
     hideGameOver();
     Object.keys(inventory).forEach(key => inventory[key] = 0);
     totalCollected = 0;
+    enemiesKilled = 0;
     missionActive = false;
     missionCompleted = false;
     missionNightCount = 1;
@@ -1352,6 +1470,7 @@
         updateWorkers(dt);
         updateMovingUnits(dt);
         updateEnemyUnits(dt);
+        handleUnitEnemyCollisions();
       }
       drawGrid();
       drawMovingUnits();
