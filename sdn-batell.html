@@ -167,6 +167,14 @@
       margin-top: 14px;
     }
 
+    .external-action {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 12px;
+      width: 100%;
+      grid-column: 1 / -1;
+    }
+
     .tile-detail {
       margin-top: 12px;
       padding: 16px;
@@ -270,10 +278,6 @@
         <h2>Mapa de batalla</h2>
         <canvas id="explore-map" width="960" height="560"></canvas>
         <div class="toolbar">
-          <button class="button" id="reveal-random">Explorar zona</button>
-          <button class="button secondary" id="reset-map">Reiniciar mapa</button>
-        </div>
-        <div class="toolbar" style="margin-top:12px; gap: 12px;">
           <button class="button" id="choose-structure">Elegir barraca</button>
           <button class="button secondary" id="build-structure">Construir</button>
         </div>
@@ -281,6 +285,9 @@
           <span style="color:#cbd5e1;font-weight:700;">Próxima oleada: <span id="enemy-wave-timer">04:00</span></span>
           <div style="margin-left:auto;color:#cbd5e1;font-weight:700;">Recursos totales: <span id="collected-count">0</span></div>
         </div>
+      </div>
+      <div class="external-action">
+        <button class="button" id="reset-map">Reiniciar mapa</button>
       </div>
 
       <div class="panel">
