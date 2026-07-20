@@ -71,6 +71,7 @@
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 24px;
       padding: 24px;
+      min-width: 0;
     }
 
     .panel h2 {
@@ -95,6 +96,44 @@
       flex-wrap: wrap;
       gap: 12px;
       align-items: center;
+    }
+
+    .mission-panel {
+      margin-top: 14px;
+      padding: 16px 18px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #e2e8f0;
+      line-height: 1.7;
+    }
+
+    .mini-map-box {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 16px;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .mini-map-box canvas {
+      width: 100%;
+      max-width: 220px;
+      height: auto;
+      display: block;
+      border-radius: 12px;
+      background: rgba(7, 11, 20, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .mission-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+      color: #f8fafc;
     }
 
     .button {
@@ -258,6 +297,85 @@
       flex-wrap: wrap;
     }
 
+    .adventure-menu {
+      position: fixed;
+      inset: 0;
+      background: rgba(3, 7, 18, 0.78);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+
+    .adventure-menu.hidden {
+      display: none;
+    }
+
+    .adventure-card {
+      width: min(100%, 460px);
+      border-radius: 24px;
+      padding: 28px;
+      background: rgba(15, 23, 42, 0.98);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+      text-align: center;
+    }
+
+    .adventure-card h2 {
+      margin-bottom: 10px;
+      font-size: 1.7rem;
+    }
+
+    .adventure-card p {
+      color: #cbd5e1;
+      margin-bottom: 18px;
+      line-height: 1.7;
+    }
+
+    .adventure-actions {
+      display: grid;
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    .save-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(3, 7, 18, 0.82);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1100;
+      padding: 20px;
+    }
+
+    .save-modal.hidden {
+      display: none;
+    }
+
+    .save-modal-card {
+      width: min(100%, 420px);
+      border-radius: 24px;
+      padding: 24px;
+      background: rgba(15, 23, 42, 0.98);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      text-align: center;
+    }
+
+    .save-modal-card h3 {
+      margin-bottom: 10px;
+      font-size: 1.35rem;
+    }
+
+    .save-modal-actions {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+
     @media (max-width: 920px) {
       .layout {
         grid-template-columns: 1fr;
@@ -268,9 +386,9 @@
 <body>
   <main class="container">
     <section class="card hero">
-      <span class="inline-label">Mapa estilo StarCraft</span>
+      <span class="inline-label">Aventura de supervivencia</span>
       <h1>Explora, recolecta y construye</h1>
-      <p>Tu castillo está en el centro del mapa. Descubre bosques, rocas, cuevas y barracas, extrae recursos y construye caballeros o arqueros.</p>
+      <p>Elige entre un mapa local con castillo y recursos o un mapa con un camino de misión. Cada partida se desarrolla en noches de defensa y cada misión exige sobrevivir más noches con más enemigos.</p>
     </section>
 
     <section class="card layout">
@@ -280,10 +398,20 @@
         <div class="toolbar">
           <button class="button" id="choose-structure">Elegir barraca</button>
           <button class="button secondary" id="build-structure">Construir</button>
+          <button class="button secondary" id="reveal-random">Explorar al azar</button>
         </div>
         <div class="toolbar" style="margin-top:12px; gap: 12px; align-items: center;">
-          <span style="color:#cbd5e1;font-weight:700;">Próxima oleada: <span id="enemy-wave-timer">04:00</span></span>
+          <span style="color:#cbd5e1;font-weight:700;">Próxima noche: <span id="enemy-wave-timer">00:45</span></span>
           <div style="margin-left:auto;color:#cbd5e1;font-weight:700;">Recursos totales: <span id="collected-count">0</span></div>
+        </div>
+        <div class="toolbar" style="margin-top:12px; gap: 12px; flex-wrap: wrap;">
+          <button class="button" id="select-local-map">Mapa local</button>
+          <button class="button secondary" id="select-path-map">Mapa del camino</button>
+          <button class="button" id="start-mission">Iniciar misión</button>
+        </div>
+        <div class="mission-panel" id="mission-panel"></div>
+        <div class="mini-map-box" id="mini-map-box" hidden>
+          <canvas id="mini-map-canvas" width="220" height="140"></canvas>
         </div>
       </div>
       <div class="external-action">
@@ -291,6 +419,9 @@
       </div>
 
       <div class="panel">
+        <div class="toolbar" style="margin-top:0; justify-content:flex-end;">
+          <button class="button" id="reset-map">Reiniciar mapa</button>
+        </div>
         <h2>Inventario</h2>
         <div class="inventory" id="inventory-panel"></div>
         <h2>Acciones</h2>
@@ -311,6 +442,29 @@
       <div class="game-over-actions">
         <button class="button" id="retry-button">Reintentar</button>
         <button class="button secondary" id="return-home-button">Volver al inicio</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="adventure-menu" class="adventure-menu hidden">
+    <div class="adventure-card">
+      <h2>Modo aventura</h2>
+      <p>Elige qué hacer con tu aventura.</p>
+      <div class="adventure-actions">
+        <button class="button" id="create-adventure">Crear nueva aventura</button>
+        <button class="button secondary" id="continue-adventure">Seguir aventura</button>
+        <button class="button secondary" id="delete-adventure">Eliminar aventura</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="save-modal" class="save-modal hidden">
+    <div class="save-modal-card">
+      <h3>Guardar y salir</h3>
+      <p>¿Quieres guardar tu progreso antes de salir?</p>
+      <div class="save-modal-actions">
+        <button class="button" id="save-and-exit">Aceptar</button>
+        <button class="button secondary" id="cancel-save">Cancelar</button>
       </div>
     </div>
   </div>

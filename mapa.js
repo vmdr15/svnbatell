@@ -59,18 +59,39 @@
   const tileTypes = ['forest', 'rock', 'cave'];
   const map = [];
   let selectedTile = null;
+  let hoverTile = null;
   let totalCollected = 0;
+  let currentMapMode = 'local';
+  const savedMaps = { local: null, path: null };
+  let enemiesKilled = 0;
+  const TOTAL_MISSIONS = 20;
+  const STORY_REGIONS = [
+    { name: 'Tutorial', missions: 1 },
+    { name: 'Planicie', missions: 5 },
+    { name: 'Bosque', missions: 5 },
+    { name: 'Desierto', missions: 5 },
+    { name: 'Montaña', missions: 4 }
+  ];
+  let currentMission = 1;
+  let missionNightCount = 1;
+  let missionGoal = 1;
+  let currentRegion = 'Tutorial';
+  let missionActive = false;
+  let missionCompleted = false;
+  let missionTimer = 0;
   const structureHealth = { castle: 200, barracks: 120 };
   const activeWorkers = [];
   const movingUnits = [];
   const enemyUnits = [];
-  const WAVE_INTERVAL_MS = 240000;
+  const WAVE_INTERVAL_MS = 45000;
   let enemyWaveInterval = null;
   let nextWaveTimestamp = Date.now() + WAVE_INTERVAL_MS;
   let currentStructureChoice = null;
   let castleCoords = { x: Math.floor(COLS / 2), y: Math.floor(ROWS / 2) };
   let lastFrameTime = Date.now();
   let gameOver = false;
+  let savePending = false;
+  const SAVE_KEY = 'svnbatell-adventure-state';
 
   function createTile(type) {
     return {
@@ -83,9 +104,50 @@
       structureHealth: null,
       units: { caballero: 0, arquero: 0 },
       building: false,
+      pathRoute: false,
+      missionNode: false,
       x: 0,
       y: 0
     };
+  }
+
+  function cloneMap(source) {
+    return source.map(row => row.map(tile => ({
+      ...tile,
+      units: { ...tile.units }
+    })));
+  }
+
+  function saveCurrentMapState() {
+    savedMaps[currentMapMode] = {
+      map: cloneMap(map),
+      selectedTile: selectedTile ? { x: selectedTile.x, y: selectedTile.y } : null,
+      castleCoords: { ...castleCoords }
+    };
+  }
+
+  function restoreMapState(mode) {
+    const state = savedMaps[mode];
+    if(!state) return false;
+    map.length = 0;
+    state.map.forEach(row => map.push(row.map(tile => ({ ...tile, units: { ...tile.units } }))));
+    castleCoords = { ...state.castleCoords };
+    selectedTile = state.selectedTile ? map[state.selectedTile.y][state.selectedTile.x] : null;
+    return true;
+  }
+
+  function switchMapMode(mode) {
+    if(currentMapMode === mode) return;
+    saveCurrentMapState();
+    currentMapMode = mode;
+    if(!restoreMapState(mode)) {
+      buildMap();
+    }
+    updateMissionPanel();
+    renderSelectedInfo();
+    drawGrid();
+    drawMiniMap();
+    addLog(`Mapa ${mode === 'local' ? 'local' : 'del camino'} activado.`);
   }
 
   function buildMap() {
@@ -100,7 +162,9 @@
       map.push(row);
     }
 
-    const center = { x: Math.floor(COLS/2), y: Math.floor(ROWS/2) };
+    const center = currentMapMode === 'path'
+      ? { x: Math.floor(COLS / 2), y: Math.floor(ROWS - 2) }
+      : { x: Math.floor(COLS / 2), y: Math.floor(ROWS / 2) };
     const castleTile = map[center.y][center.x];
     castleTile.type = 'castle';
     castleTile.discovered = true;
@@ -109,11 +173,69 @@
     castleTile.collected = true;
 
     createEmptyRing(center.x, center.y);
-    fillResources();
+    if(currentMapMode === 'path') {
+      fillResources();
+      createPathMap(center.x, center.y);
+    } else {
+      fillResources();
+    }
     map.forEach(row => row.forEach(tile => tile.discovered = true));
     selectedTile = castleTile;
     castleCoords = { x: center.x, y: center.y };
     activeWorkers.length = 0;
+  }
+
+  function createPathMap(cx, cy) {
+    const checkpoints = [
+      { x: cx, y: cy },
+      { x: Math.max(1, Math.floor(COLS / 3)), y: Math.max(1, Math.floor(ROWS / 3)) },
+      { x: Math.min(COLS - 2, Math.floor(COLS * 0.66)), y: Math.max(1, Math.floor(ROWS / 3)) },
+      { x: Math.min(COLS - 2, Math.floor(COLS * 0.66)), y: Math.min(ROWS - 2, Math.floor(ROWS * 0.72)) },
+      { x: Math.max(1, Math.floor(COLS / 4)), y: Math.min(ROWS - 2, Math.floor(ROWS * 0.82)) }
+    ];
+
+    const markPath = (from, to) => {
+      let x = from.x;
+      let y = from.y;
+      while(x !== to.x || y !== to.y) {
+        if(x !== to.x) x += x < to.x ? 1 : -1;
+        else if(y !== to.y) y += y < to.y ? 1 : -1;
+        const tile = map[y] && map[y][x];
+        if(tile) {
+          tile.pathRoute = true;
+          tile.discovered = true;
+          tile.collected = true;
+          tile.type = 'empty';
+        }
+      }
+    };
+
+    for(let i = 1; i < checkpoints.length; i++) {
+      markPath(checkpoints[i - 1], checkpoints[i]);
+    }
+
+    const missionNodes = [
+      { ...checkpoints[1], missionNodeIndex: 1 },
+      { ...checkpoints[2], missionNodeIndex: 2 },
+      { ...checkpoints[3], missionNodeIndex: 3 },
+      { ...checkpoints[4], missionNodeIndex: 4 }
+    ];
+
+    missionNodes.forEach(node => {
+      const tile = map[node.y] && map[node.y][node.x];
+      if(tile) {
+        tile.missionNode = true;
+        tile.missionNodeIndex = node.missionNodeIndex;
+        tile.pathRoute = true;
+        tile.discovered = true;
+        tile.collected = true;
+      }
+    });
+
+    for(let i = 0; i < 3; i++) {
+      placeCluster('rock', 1, 2);
+      placeCluster('forest', 1, 2);
+    }
   }
 
   function isCenter(x,y) {
@@ -222,6 +344,16 @@
     }
   }
 
+  function getMissionNodeColor(index) {
+    const colors = {
+      1: 'rgba(248, 113, 113, 0.95)',
+      2: 'rgba(249, 115, 22, 0.95)',
+      3: 'rgba(34, 197, 94, 0.95)',
+      4: 'rgba(59, 130, 246, 0.95)'
+    };
+    return colors[index] || 'rgba(245, 158, 11, 0.95)';
+  }
+
   function drawGrid() {
     ctx.clearRect(0,0,canvas.width,canvas.height);
     for(let y=0;y<ROWS;y++){
@@ -235,6 +367,23 @@
         if(tile.discovered){
           if(tile.type && assetImages[tile.type]?.complete){
             ctx.drawImage(assetImages[tile.type], px+4, py+4, TILE-8, TILE-8);
+          }
+          if(currentMapMode === 'path' && tile.pathRoute) {
+            ctx.fillStyle = 'rgba(37, 99, 235, 0.24)';
+            ctx.fillRect(px + 6, py + 6, TILE - 12, TILE - 12);
+            ctx.strokeStyle = 'rgba(59, 130, 246, 0.45)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(px + 8, py + 8, TILE - 16, TILE - 16);
+          }
+          if(currentMapMode === 'path' && tile.missionNode) {
+            const color = getMissionNodeColor(tile.missionNodeIndex);
+            ctx.beginPath();
+            ctx.arc(px + TILE/2, py + TILE/2, TILE/4.2, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.strokeStyle = hoverTile === tile ? '#ffffff' : '#f8fafc';
+            ctx.lineWidth = hoverTile === tile ? 4 : 2;
+            ctx.stroke();
           }
           if(tile.structure === 'castle' && inventory.mineros > 0 && assetImages.minero.complete) {
             ctx.drawImage(assetImages.minero, px+6, py+6, TILE/2.2, TILE/2.2);
@@ -250,6 +399,11 @@
         if(!tile.discovered){
           ctx.fillStyle = 'rgba(0,0,0,0.90)';
           ctx.fillRect(px, py, TILE-1, TILE-1);
+        }
+
+        if(currentMapMode === 'path' && tile.pathRoute) {
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.12)';
+          ctx.fillRect(px + 2, py + 2, TILE - 4, TILE - 4);
         }
 
         if(selectedTile && selectedTile.x === x && selectedTile.y === y){
@@ -536,9 +690,115 @@
     document.getElementById('collected-count').textContent = totalCollected;
   }
 
+  function saveAdventureState() {
+    const state = {
+      currentMission,
+      currentMapMode,
+      missionNightCount,
+      missionGoal,
+      missionActive,
+      missionCompleted,
+      totalCollected,
+      enemiesKilled,
+      inventory,
+      currentRegion,
+      castleCoords,
+      selectedTile: selectedTile ? { x: selectedTile.x, y: selectedTile.y } : null
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+    addLog('Progreso guardado.');
+  }
+
+  function loadAdventureState() {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if(!raw) return false;
+    try {
+      const state = JSON.parse(raw);
+      currentMission = state.currentMission || 1;
+      currentMapMode = state.currentMapMode || 'local';
+      missionNightCount = state.missionNightCount || 1;
+      missionGoal = state.missionGoal || 1;
+      missionActive = Boolean(state.missionActive);
+      missionCompleted = Boolean(state.missionCompleted);
+      totalCollected = state.totalCollected || 0;
+      enemiesKilled = state.enemiesKilled || 0;
+      Object.assign(inventory, state.inventory || inventory);
+      currentRegion = state.currentRegion || 'Tutorial';
+      castleCoords = state.castleCoords || castleCoords;
+      selectedTile = null;
+      buildMap();
+      updateInventoryPanel();
+      renderSelectedInfo();
+      drawGrid();
+      drawMiniMap();
+      updateMissionPanel();
+      updateCounters();
+      addLog('Se cargó una aventura guardada.');
+      return true;
+    } catch (error) {
+      console.error('No se pudo cargar el progreso', error);
+      return false;
+    }
+  }
+
+  function deleteAdventureState() {
+    localStorage.removeItem(SAVE_KEY);
+    currentMission = 1;
+    currentMapMode = 'local';
+    missionNightCount = 1;
+    missionGoal = 1;
+    currentRegion = 'Tutorial';
+    missionActive = false;
+    missionCompleted = false;
+    totalCollected = 0;
+    Object.keys(inventory).forEach(key => inventory[key] = 0);
+    buildMap();
+    updateInventoryPanel();
+    renderSelectedInfo();
+    drawGrid();
+    drawMiniMap();
+    updateMissionPanel();
+    updateCounters();
+    addLog('Se eliminó la aventura guardada.');
+  }
+
+  function openAdventureMenu() {
+    const menu = document.getElementById('adventure-menu');
+    if(menu) menu.classList.remove('hidden');
+  }
+
+  function closeAdventureMenu() {
+    const menu = document.getElementById('adventure-menu');
+    if(menu) menu.classList.add('hidden');
+  }
+
+  function askSaveAndExit() {
+    const modal = document.getElementById('save-modal');
+    if(modal) modal.classList.remove('hidden');
+    savePending = true;
+  }
+
+  function closeSaveModal() {
+    const modal = document.getElementById('save-modal');
+    if(modal) modal.classList.add('hidden');
+    savePending = false;
+  }
+
   function renderSelectedInfo() {
     const info = document.getElementById('selected-info');
     if(!info) return;
+    if(hoverTile && currentMapMode === 'path' && hoverTile.missionNode) {
+      const nodeIndex = hoverTile.missionNodeIndex || 1;
+      const estimatedNights = nodeIndex + 1;
+      const estimatedEnemies = 4 + nodeIndex * 2;
+      info.innerHTML = `
+        <div class="info-row"><span><strong>Nodo de misión:</strong></span><span>${nodeIndex}/4</span></div>
+        <div class="info-row"><span><strong>Noches estimadas:</strong></span><span>${estimatedNights}</span></div>
+        <div class="info-row"><span><strong>Enemigos aproximados:</strong></span><span>${estimatedEnemies}</span></div>
+        <p class="status-note">Coloca el cursor sobre otro nodo para comparar misiones, o haz clic para seleccionar el tile.</p>
+      `;
+      return;
+    }
     if(!selectedTile) {
       info.innerHTML = '<p>Haz clic en un tile descubierto para ver detalles.</p>';
       return;
@@ -743,12 +1003,13 @@
   }
 
   function spawnEnemyWave() {
-    const waveCount = 3 + Math.floor(Math.random() * 2);
+    const nightNumber = missionNightCount;
+    const waveCount = 4 + nightNumber + Math.floor(Math.random() * 2);
     for(let i = 0; i < waveCount; i++) {
       const spawn = getEnemySpawnTile();
       const type = i % 2 === 0 ? 'slime' : 'lagart';
       const path = computePath({ x: spawn.x, y: spawn.y }, { x: castleCoords.x, y: castleCoords.y });
-      const msPerBlock = MS_PER_BLOCK; // unified speed: 1.5 blocks per second
+      const msPerBlock = MS_PER_BLOCK;
       enemyUnits.push({
         type,
         pos: { x: spawn.x, y: spawn.y },
@@ -759,8 +1020,14 @@
         arrived: path.length === 0
       });
     }
+    missionNightCount += 1;
     nextWaveTimestamp = Date.now() + WAVE_INTERVAL_MS;
-    addLog(`Oleada enemiga: ${waveCount} unidades (${waveCount % 2 === 0 ? 'slimes y lagarts' : 'slimes y lagart'}).`);
+    if(missionActive && missionNightCount > missionGoal) {
+      completeMission();
+      return;
+    }
+    addLog(`Noche ${nightNumber}: ${waveCount} enemigos intentando entrar a la base.`);
+    updateMissionPanel();
   }
 
   function updateEnemyUnits(dt) {
@@ -798,6 +1065,23 @@
     }
   }
 
+  function handleUnitEnemyCollisions() {
+    for(let u = 0; u < movingUnits.length; u++) {
+      const unit = movingUnits[u];
+      const unitTileX = Math.round(unit.pos.x);
+      const unitTileY = Math.round(unit.pos.y);
+      for(let e = enemyUnits.length - 1; e >= 0; e--) {
+        const enemy = enemyUnits[e];
+        if(Math.round(enemy.pos.x) === unitTileX && Math.round(enemy.pos.y) === unitTileY) {
+          enemyUnits.splice(e, 1);
+          enemiesKilled += 1;
+          addLog(`Un ${unit.type} eliminó a un ${enemy.type}.`);
+          updateMissionPanel();
+        }
+      }
+    }
+  }
+
   function drawEnemyUnits() {
     enemyUnits.forEach(enemy => {
       const px = enemy.pos.x * TILE + TILE / 2;
@@ -831,7 +1115,11 @@
     if(spawnImmediate) {
       spawnEnemyWave();
     }
-    enemyWaveInterval = setInterval(spawnEnemyWave, WAVE_INTERVAL_MS);
+    enemyWaveInterval = setInterval(() => {
+      if(missionActive) {
+        spawnEnemyWave();
+      }
+    }, WAVE_INTERVAL_MS);
   }
 
   function updateMovingUnits(dt) {
@@ -868,6 +1156,56 @@
     });
   }
 
+  function drawMiniMap() {
+    const box = document.getElementById('mini-map-box');
+    const canvas = document.getElementById('mini-map-canvas');
+    if(!box || !canvas) return;
+    const ctxMini = canvas.getContext('2d');
+    const size = 220;
+    ctxMini.clearRect(0, 0, size, size);
+    if(currentMapMode !== 'path') {
+      box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    ctxMini.fillStyle = '#07111d';
+    ctxMini.fillRect(0, 0, size, size);
+    ctxMini.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctxMini.lineWidth = 1;
+    for(let i = 0; i <= 4; i++) {
+      const pos = i * 44;
+      ctxMini.beginPath();
+      ctxMini.moveTo(0, pos);
+      ctxMini.lineTo(size, pos);
+      ctxMini.stroke();
+      ctxMini.beginPath();
+      ctxMini.moveTo(pos, 0);
+      ctxMini.lineTo(pos, size);
+      ctxMini.stroke();
+    }
+    ctxMini.fillStyle = '#38bdf8';
+    const startX = size * 0.2;
+    const startY = size * 0.25;
+    const midX = size * 0.5;
+    const midY = size * 0.5;
+    const endX = size * 0.8;
+    const endY = size * 0.8;
+    ctxMini.beginPath();
+    ctxMini.moveTo(startX, startY);
+    ctxMini.lineTo(midX, startY);
+    ctxMini.lineTo(midX, midY);
+    ctxMini.lineTo(endX, midY);
+    ctxMini.lineTo(endX, endY);
+    ctxMini.strokeStyle = '#38bdf8';
+    ctxMini.lineWidth = 3;
+    ctxMini.stroke();
+    ctxMini.fillRect(startX - 4, startY - 4, 8, 8);
+    ctxMini.fillRect(endX - 4, endY - 4, 8, 8);
+    ctxMini.fillStyle = '#f59e0b';
+    ctxMini.fillRect(midX - 4, midY - 4, 8, 8);
+    ctxMini.fillRect(size * 0.5 - 4, size * 0.2 - 4, 8, 8);
+  }
+
   function chooseStructure(type) {
     currentStructureChoice = type;
     const button = document.getElementById('choose-structure');
@@ -885,6 +1223,89 @@
       }
     }
     return null;
+  }
+
+  function updateMissionPanel() {
+    const panel = document.getElementById('mission-panel');
+    if(!panel) return;
+    const nightsPassed = missionActive
+      ? Math.max(0, missionNightCount - 1)
+      : Math.max(0, Math.min(missionNightCount - 1, missionGoal));
+    const missionLabel = missionActive ? `Misión activa · Noche ${Math.min(nightsPassed, missionGoal)}/${missionGoal}` : `Misión ${Math.min(currentMission, TOTAL_MISSIONS)}`;
+    const state = missionCompleted ? 'Completada' : (missionActive ? 'En curso' : 'Pendiente');
+    const progressText = missionActive ? `Progreso: ${Math.min(nightsPassed, missionGoal)}/${missionGoal}` : `Progreso de historia: ${Math.min(currentMission - 1, TOTAL_MISSIONS)}/${TOTAL_MISSIONS}`;
+    const regionName = getRegionForMission(currentMission);
+    currentRegion = regionName;
+    panel.innerHTML = `
+      <div class="mission-header">
+        <strong>${missionLabel}</strong>
+        <span>${state}</span>
+      </div>
+      <div>Región: ${regionName}</div>
+      <div>Noches llevadas: ${nightsPassed}</div>
+      <div>Noches objetivo: ${missionGoal}</div>
+      <div>Enemigos eliminados: ${enemiesKilled}</div>
+      <div>${progressText}</div>
+      <div>Mapa actual: ${currentMapMode === 'local' ? 'Local con castillo, base y recursos' : 'Camino de misión con nodos y recursos'}</div>
+    `;
+  }
+
+  function getRegionForMission(missionNumber) {
+    let count = 0;
+    for(const region of STORY_REGIONS) {
+      count += region.missions;
+      if(missionNumber <= count) return region.name;
+    }
+    return 'Montaña';
+  }
+
+  function startMission() {
+    if(currentMission > TOTAL_MISSIONS) {
+      addLog('Has completado las 20 misiones de historia.');
+      updateMissionPanel();
+      return;
+    }
+    missionActive = true;
+    missionCompleted = false;
+    missionNightCount = 1;
+    enemiesKilled = 0;
+    const region = getRegionForMission(currentMission);
+    const baseGoal = region === 'Tutorial' ? 1 : region === 'Planicie' ? 2 : region === 'Bosque' ? 3 : region === 'Desierto' ? 4 : 5;
+    missionGoal = Math.min(baseGoal + Math.floor((currentMission - 1) / 4), 8);
+    totalCollected = 0;
+    inventory.madera = 0;
+    inventory.piedra = 0;
+    inventory.mineral = 0;
+    inventory.oro = 0;
+    inventory.hierro = 0;
+    inventory.cobre = 0;
+    inventory.mineros = 0;
+    inventory.caballeros = 0;
+    inventory.arqueros = 0;
+    enemyUnits.length = 0;
+    movingUnits.length = 0;
+    activeWorkers.length = 0;
+    buildMap();
+    updateInventoryPanel();
+    renderSelectedInfo();
+    drawGrid();
+    drawMiniMap();
+    nextWaveTimestamp = Date.now() + WAVE_INTERVAL_MS;
+    addLog(`¡Comienza la misión ${currentMission}/${TOTAL_MISSIONS} en ${region}! Sobrevive a ${missionGoal} noches.`);
+    updateMissionPanel();
+    updateCounters();
+    startEnemyWaves(true);
+  }
+
+  function completeMission() {
+    if(!missionActive) return;
+    missionCompleted = true;
+    missionActive = false;
+    if(currentMission < TOTAL_MISSIONS) {
+      currentMission += 1;
+    }
+    addLog(`¡Misión ${Math.min(currentMission, TOTAL_MISSIONS)} completada! Superaste ${missionGoal} noches.`);
+    updateMissionPanel();
   }
 
   function buildSelectedStructure() {
@@ -941,12 +1362,55 @@
     }
   });
 
+  canvas.addEventListener('mousemove', (event) => {
+    if(currentMapMode !== 'path') return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = Math.floor((event.clientX - rect.left) * scaleX / TILE);
+    const y = Math.floor((event.clientY - rect.top) * scaleY / TILE);
+    const tile = map[y] && map[y][x];
+    if(tile && tile.missionNode) {
+      if(hoverTile !== tile) {
+        hoverTile = tile;
+        renderSelectedInfo();
+      }
+      return;
+    }
+    if(hoverTile) {
+      hoverTile = null;
+      renderSelectedInfo();
+    }
+  });
+
+  canvas.addEventListener('mouseout', () => {
+    if(hoverTile) {
+      hoverTile = null;
+      renderSelectedInfo();
+    }
+  });
+
   document.getElementById('reveal-random').addEventListener('click', autoExplore);
   document.getElementById('reset-map').addEventListener('click', resetMap);
   document.getElementById('choose-structure').addEventListener('click', ()=>chooseStructure('barracks'));
   document.getElementById('build-structure').addEventListener('click', buildSelectedStructure);
+  document.getElementById('select-local-map').addEventListener('click', ()=> switchMapMode('local'));
+  document.getElementById('select-path-map').addEventListener('click', ()=> switchMapMode('path'));
+  document.getElementById('start-mission').addEventListener('click', startMission);
   document.getElementById('retry-button').addEventListener('click', resetMap);
-  document.getElementById('return-home-button').addEventListener('click', ()=> window.location.href = 'index.html');
+  document.getElementById('return-home-button').addEventListener('click', ()=> { askSaveAndExit(); });
+  document.getElementById('save-and-exit').addEventListener('click', ()=> { saveAdventureState(); closeSaveModal(); window.location.href = 'index.html'; });
+  document.getElementById('cancel-save').addEventListener('click', ()=> { closeSaveModal(); });
+  document.getElementById('create-adventure').addEventListener('click', ()=> { deleteAdventureState(); closeAdventureMenu(); startMission(); });
+  document.getElementById('continue-adventure').addEventListener('click', ()=> { closeAdventureMenu(); loadAdventureState(); });
+  document.getElementById('delete-adventure').addEventListener('click', ()=> { deleteAdventureState(); closeAdventureMenu(); });
+
+  window.addEventListener('beforeunload', (event) => {
+    if(savePending) return;
+    saveAdventureState();
+    event.preventDefault();
+    event.returnValue = '';
+  });
 
   window.mapActions = {
     gather() {
@@ -973,6 +1437,10 @@
     hideGameOver();
     Object.keys(inventory).forEach(key => inventory[key] = 0);
     totalCollected = 0;
+    enemiesKilled = 0;
+    missionActive = false;
+    missionCompleted = false;
+    missionNightCount = 1;
     currentStructureChoice = null;
     enemyUnits.length = 0;
     movingUnits.length = 0;
@@ -984,6 +1452,7 @@
     const chooseButton = document.getElementById('choose-structure');
     if(chooseButton) chooseButton.textContent = 'Elegir barraca';
     updateCounters();
+    updateMissionPanel();
     buildMap();
     updateInventoryPanel();
     renderSelectedInfo();
@@ -1001,6 +1470,7 @@
         updateWorkers(dt);
         updateMovingUnits(dt);
         updateEnemyUnits(dt);
+        handleUnitEnemyCollisions();
       }
       drawGrid();
       drawMovingUnits();
@@ -1011,6 +1481,9 @@
   }
 
   buildMap();
+  updateMissionPanel();
+  drawMiniMap();
+  openAdventureMenu();
   // Start enemy wave timer but do not spawn immediately at game start
   startEnemyWaves(false);
   updateInventoryPanel();
